@@ -70,18 +70,19 @@ export class SearchController {
     lines.push(`Search results for ${query} (${results.length} results):`)
     lines.push('')
 
-    lines.push(' # | Score | ID                  | Category | Title                  | Snippet')
-    lines.push('---|-------|---------------------|----------|------------------------|----------------------------------')
+    // Calculate dynamic column width for ID (never truncate)
+    const maxIdLen = Math.max(4, ...results.map(r => r.id.length))
+
+    lines.push(` # | Score | ${'ID'.padEnd(maxIdLen)} | Category | Title`)
+    lines.push(`---|-------|${''.padEnd(maxIdLen, '-')}--|----------|------`)
 
     for (let i = 0; i < results.length; i++) {
       const r = results[i]
       const num = String(i + 1).padStart(2, ' ')
       const score = r.score.toFixed(3).padStart(5, ' ')
-      const id = r.id.padEnd(19, ' ').slice(0, 19)
+      const id = r.id.padEnd(maxIdLen)
       const category = r.category.padEnd(8, ' ').slice(0, 8)
-      const title = r.title.padEnd(22, ' ').slice(0, 22)
-      const snippet = r.snippet.slice(0, 34)
-      lines.push(`${num} | ${score} | ${id} | ${category} | ${title} | ${snippet}`)
+      lines.push(`${num} | ${score} | ${id} | ${category} | ${r.title}`)
     }
 
     return lines.join('\n')
