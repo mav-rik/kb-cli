@@ -1,4 +1,4 @@
-import { CliApp, Controller, Cli, Description } from '@moostjs/event-cli'
+import { CliApp, Controller, Cli, CliOption, Description, Optional } from '@moostjs/event-cli'
 import { KbController } from './controllers/kb.controller.js'
 import { ConfigController } from './controllers/config.controller.js'
 import { ReadController } from './controllers/read.controller.js'
@@ -7,6 +7,7 @@ import { SearchController } from './controllers/search.controller.js'
 import { LintController } from './controllers/lint.controller.js'
 import { SkillController } from './controllers/skill.controller.js'
 import { SetupController } from './controllers/setup.controller.js'
+import { startServer } from './api/serve.js'
 
 @Controller()
 class AppController {
@@ -35,6 +36,7 @@ class AppController {
       '  config <cmd>       Manage configuration (get/set/list)',
       '  skill [workflow]   Show agent instructions',
       '  setup              Install agent integrations',
+      '  serve              Start HTTP API server (--port, -p)',
       '  version            Show version',
       '',
       'Global options:',
@@ -49,6 +51,18 @@ class AppController {
   @Description('Show version')
   version() {
     return '0.1.0'
+  }
+
+  @Cli('serve')
+  @Description('Start HTTP API server')
+  async serve(
+    @Description('Port number') @CliOption('port', 'p') @Optional() port: string,
+  ) {
+    const p = port ? parseInt(port, 10) : 4141
+    await startServer(p)
+    // Keep process alive — the HTTP server keeps the event loop running,
+    // but moostjs CLI might exit after handler returns
+    await new Promise(() => {})
   }
 }
 

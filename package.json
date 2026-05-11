@@ -31,8 +31,10 @@
     "@atscript/typescript": "^0.1.52",
     "@huggingface/transformers": "^4.2.0",
     "@moostjs/event-cli": "^0.6.9",
+    "@moostjs/event-http": "^0.6.9",
     "better-sqlite3": "^12.9.0",
     "gray-matter": "^4.0.3",
+    "moost": "^0.6.9",
     "sqlite-vec": "^0.1.9"
   },
   "pnpm": {

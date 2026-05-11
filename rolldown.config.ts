@@ -11,6 +11,7 @@ export default defineConfig({
     plugins: [atscript({ strict: true })],
     external: [
         '@moostjs/event-cli',
+        '@moostjs/event-http',
         'moost',
         'better-sqlite3',
         'gray-matter',
