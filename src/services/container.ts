@@ -10,6 +10,7 @@ import { SearchService } from './search.service.js'
 import { DocWorkflowService } from './doc-workflow.service.js'
 import { KbManagementService } from './kb-management.service.js'
 import { ActivityLogService } from './activity-log.service.js'
+import { SchemaService } from './schema.service.js'
 
 class ServiceContainer {
   readonly config = new ConfigService()
@@ -24,6 +25,7 @@ class ServiceContainer {
   readonly docWorkflow: DocWorkflowService
   readonly kbManagement: KbManagementService
   readonly activityLog: ActivityLogService
+  readonly schema: SchemaService
 
   constructor() {
     this.index = new IndexService(this.config)
@@ -35,6 +37,7 @@ class ServiceContainer {
     this.docWorkflow = new DocWorkflowService(this.parser, this.index, this.linker, this.embedding, this.vector, this.fts, this.storage)
     this.kbManagement = new KbManagementService(this.config)
     this.activityLog = new ActivityLogService(this.config)
+    this.schema = new SchemaService(this.config, this.index, this.storage, this.parser)
   }
 }
 

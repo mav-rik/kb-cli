@@ -5,6 +5,7 @@ import { services } from '../services/container.js'
 export class LintController {
   private get config() { return services.config }
   private get workflow() { return services.docWorkflow }
+  private get schema() { return services.schema }
 
   @Cli('lint')
   @Description('Check knowledge base integrity')
@@ -120,5 +121,28 @@ export class LintController {
     })
 
     return lines.join('\n')
+  }
+
+  @Cli('schema')
+  @Description('Show knowledge base schema')
+  schemaRead(
+    @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
+  ): string {
+    const kbName = this.config.resolveKb(kb)
+    const content = this.schema.read(kbName)
+    if (!content) {
+      return `No schema found for "${kbName}". Run \`aimem schema update\` to generate.`
+    }
+    return content
+  }
+
+  @Cli('schema/update')
+  @Description('Regenerate knowledge base schema')
+  async schemaUpdate(
+    @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
+  ): Promise<string> {
+    const kbName = this.config.resolveKb(kb)
+    await this.schema.update(kbName)
+    return `Schema updated for "${kbName}".`
   }
 }

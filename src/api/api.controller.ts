@@ -298,4 +298,21 @@ export class ApiController {
     }
     return fs.readFileSync(filePath, 'utf-8')
   }
+
+  // ─── Schema ────────────────────────────────────────────────────────────────
+
+  @Get('schema')
+  schemaRead(@Query('kb') kb: string) {
+    const kbName = this.config.resolveKb(kb)
+    const content = services.schema.read(kbName)
+    if (!content) return { error: 'No schema found. Call POST /api/schema to generate.' }
+    return content
+  }
+
+  @Post('schema')
+  async schemaUpdate(@Query('kb') kb: string) {
+    const kbName = this.config.resolveKb(kb)
+    await services.schema.update(kbName)
+    return { updated: true, kb: kbName }
+  }
 }

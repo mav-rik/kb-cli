@@ -33,6 +33,8 @@ class AppController {
       '  reindex            Rebuild index from files',
       '  toc                Show table of contents',
       '  log                Show recent activity log',
+      '  schema             Show KB schema (structure, conventions)',
+      '  schema update      Regenerate schema from current state',
       '  kb <cmd>           Manage knowledge bases (create/list/info/delete/use)',
       '  config <cmd>       Manage configuration (get/set/list)',
       '  skill [workflow]   Show agent instructions',
