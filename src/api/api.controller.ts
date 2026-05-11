@@ -1,3 +1,6 @@
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { Controller, Param } from 'moost'
 import { Get, Post, Put, Delete, Body, Query, SetStatus } from '@moostjs/event-http'
 import { services } from '../services/container.js'
@@ -260,5 +263,39 @@ export class ApiController {
     }
 
     return { categories: grouped }
+  }
+
+  // ─── Activity Log ──────────────────────────────────────────────────────────
+
+  @Get('log')
+  log(@Query('kb') kb: string, @Query('limit') limit: string) {
+    const kbName = this.config.resolveKb(kb)
+    const parsedLimit = limit ? parseInt(limit, 10) : 20
+    return services.activityLog.recent(kbName, parsedLimit)
+  }
+
+  // ─── KB Use ────────────────────────────────────────────────────────────────
+
+  @Put('kb/use/:name')
+  kbUse(@Param('name') name: string) {
+    if (!this.kbMgmt.exists(name)) {
+      return { error: `Knowledge base "${name}" does not exist.` }
+    }
+    this.config.set('defaultKb', name)
+    return { defaultKb: name }
+  }
+
+  // ─── Skill ────────────────────────────────────────────────────────────────
+
+  @Get('skill')
+  skill(@Query('workflow') workflow: string) {
+    const __dirname = path.dirname(fileURLToPath(import.meta.url))
+    const contentDir = path.resolve(__dirname, '..', 'content')
+    const filename = workflow ? `skill-${workflow}.md` : 'skill.md'
+    const filePath = path.join(contentDir, filename)
+    if (!fs.existsSync(filePath)) {
+      return { error: `Unknown workflow "${workflow}". Available: ingest, search, update, lint` }
+    }
+    return fs.readFileSync(filePath, 'utf-8')
   }
 }
