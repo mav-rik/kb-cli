@@ -9,6 +9,7 @@ import { FtsService } from './fts.service.js'
 import { SearchService } from './search.service.js'
 import { DocWorkflowService } from './doc-workflow.service.js'
 import { KbManagementService } from './kb-management.service.js'
+import { ActivityLogService } from './activity-log.service.js'
 
 class ServiceContainer {
   readonly config = new ConfigService()
@@ -22,6 +23,7 @@ class ServiceContainer {
   readonly search: SearchService
   readonly docWorkflow: DocWorkflowService
   readonly kbManagement: KbManagementService
+  readonly activityLog: ActivityLogService
 
   constructor() {
     this.index = new IndexService(this.config)
@@ -32,6 +34,7 @@ class ServiceContainer {
     this.search = new SearchService(this.embedding, this.vector, this.fts, this.index, this.storage)
     this.docWorkflow = new DocWorkflowService(this.parser, this.index, this.linker, this.embedding, this.vector, this.fts, this.storage)
     this.kbManagement = new KbManagementService(this.config)
+    this.activityLog = new ActivityLogService(this.config)
   }
 }
 

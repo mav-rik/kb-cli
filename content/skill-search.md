@@ -50,6 +50,16 @@ aimem categories
 aimem list --category <category>
 ```
 
+## Step 5: Persist valuable answers
+
+If you synthesized a substantial answer by combining information from multiple documents, **save it back** as a new document. This enriches the KB for future queries.
+
+```bash
+aimem add --title "How Auth System Works" --category concepts --tags "auth,architecture" --content "<your synthesized answer with links to source docs>"
+```
+
+This only applies when the answer adds value beyond what individual docs already say (e.g., a synthesis, a summary connecting multiple topics, or a resolved question).
+
 ## Tips
 
 - Use natural language for semantic matches ("how does authentication work")

@@ -12,6 +12,7 @@ export class DocController {
   private get index() { return services.index }
   private get linker() { return services.linker }
   private get workflow() { return services.docWorkflow }
+  private get log() { return services.activityLog }
 
   @Cli('add')
   @Description('Add a new document')
@@ -77,6 +78,7 @@ export class DocController {
     }
 
     await this.workflow.indexAndEmbed(kbName, id, frontmatter, body, filename)
+    this.log.log(kbName, 'add', id, `category=${frontmatter.category}`)
 
     const output = [`Created: ${filename}`]
     output.push(...warnings)
@@ -121,6 +123,7 @@ export class DocController {
 
     this.storage.writeDoc(kbName, filename, frontmatter, body)
     await this.workflow.indexAndEmbed(kbName, docId, frontmatter, body, filename)
+    this.log.log(kbName, 'update', docId)
 
     return `Updated: ${filename}`
   }
@@ -150,6 +153,7 @@ export class DocController {
 
     this.storage.deleteDoc(kbName, filename)
     await this.workflow.removeFromIndex(kbName, docId)
+    this.log.log(kbName, 'delete', docId)
 
     const output = [`Deleted: ${filename}`]
     output.push(...warnings)
@@ -206,6 +210,8 @@ export class DocController {
         )
       }
     }
+
+    this.log.log(kbName, 'rename', newId, `from=${oldId}`)
 
     const linkInfo = modifiedCount > 0
       ? ` Updated links in ${modifiedCount} documents.`

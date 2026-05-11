@@ -98,4 +98,27 @@ export class LintController {
 
     return lines.join('\n')
   }
+
+  @Cli('log')
+  @Description('Show recent activity log')
+  log(
+    @Description('Number of entries') @CliOption('limit', 'n') @Optional() limit: string,
+    @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
+  ): string {
+    const kbName = this.config.resolveKb(kb)
+    const parsedLimit = limit ? parseInt(limit, 10) : 20
+    const entries = services.activityLog.recent(kbName, parsedLimit)
+
+    if (entries.length === 0) {
+      return 'No activity recorded.'
+    }
+
+    const lines = entries.map((e) => {
+      const doc = e.docId ? ` ${e.docId}` : ''
+      const details = e.details ? ` (${e.details})` : ''
+      return `${e.timestamp} | ${e.operation.padEnd(8)}${doc}${details}`
+    })
+
+    return lines.join('\n')
+  }
 }
