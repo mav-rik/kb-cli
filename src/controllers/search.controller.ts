@@ -29,7 +29,7 @@ export class SearchController {
     }
 
     if (format === 'json') {
-      return results
+      return JSON.stringify(results, null, 2)
     }
 
     return this.formatTable(query, results)
@@ -67,7 +67,7 @@ export class SearchController {
     }
 
     if (format === 'json') {
-      return results
+      return JSON.stringify(results, null, 2)
     }
 
     return this.formatTable(`related to "${docId}"`, results)

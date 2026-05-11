@@ -262,7 +262,7 @@ export class DocController {
     }
 
     if (format === 'json') {
-      return docs
+      return JSON.stringify(docs, null, 2)
     }
 
     const header = 'ID | Title | Category | Tags | Updated'
