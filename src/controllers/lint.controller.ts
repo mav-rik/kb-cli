@@ -11,9 +11,9 @@ export class LintController {
   @Description('Check knowledge base integrity')
   async lint(
     @Description('Auto-fix issues') @CliOption('fix') fix: boolean,
-    @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
-    const kbName = this.config.resolveKb(kb)
+    const kbName = this.config.resolveWiki(wiki)
     const issues = await this.workflow.lint(kbName)
 
     let fixedCount = 0
@@ -48,9 +48,9 @@ export class LintController {
   @Cli('reindex')
   @Description('Rebuild index from markdown files')
   async reindex(
-    @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
-    const kbName = this.config.resolveKb(kb)
+    const kbName = this.config.resolveWiki(wiki)
 
     const result = await this.workflow.reindex(kbName, (current, total) => {
       process.stderr.write(`Reindexing... ${current}/${total}\r`)
@@ -66,9 +66,9 @@ export class LintController {
   @Cli('toc')
   @Description('Display table of contents for a knowledge base')
   async toc(
-    @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
-    const kbName = this.config.resolveKb(kb)
+    const kbName = this.config.resolveWiki(wiki)
 
     const docs = await services.index.listDocs(kbName)
 
@@ -104,9 +104,9 @@ export class LintController {
   @Description('Show recent activity log')
   log(
     @Description('Number of entries') @CliOption('limit', 'n') @Optional() limit: string,
-    @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): string {
-    const kbName = this.config.resolveKb(kb)
+    const kbName = this.config.resolveWiki(wiki)
     const parsedLimit = limit ? parseInt(limit, 10) : 20
     const entries = services.activityLog.recent(kbName, parsedLimit)
 
@@ -126,12 +126,12 @@ export class LintController {
   @Cli('schema')
   @Description('Show knowledge base schema')
   schemaRead(
-    @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): string {
-    const kbName = this.config.resolveKb(kb)
+    const kbName = this.config.resolveWiki(wiki)
     const content = this.schema.read(kbName)
     if (!content) {
-      return `No schema found for "${kbName}". Run \`aimem schema update\` to generate.`
+      return `No schema found for "${kbName}". Run \`kb schema update\` to generate.`
     }
     return content
   }
@@ -139,9 +139,9 @@ export class LintController {
   @Cli('schema/update')
   @Description('Regenerate knowledge base schema')
   async schemaUpdate(
-    @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
-    const kbName = this.config.resolveKb(kb)
+    const kbName = this.config.resolveWiki(wiki)
     await this.schema.update(kbName)
     return `Schema updated for "${kbName}".`
   }

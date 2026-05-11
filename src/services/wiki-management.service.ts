@@ -2,9 +2,9 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { ConfigService } from './config.service.js'
 
-const VALID_KB_NAME = /^[a-z0-9][a-z0-9_-]*$/
+const VALID_WIKI_NAME = /^[a-z0-9][a-z0-9_-]*$/
 
-export class KbManagementService {
+export class WikiManagementService {
   constructor(private config: ConfigService) {}
 
   list(): string[] {
@@ -18,30 +18,30 @@ export class KbManagementService {
   }
 
   create(name: string): { name: string } | { error: string } {
-    if (!name || !VALID_KB_NAME.test(name)) {
-      return { error: 'KB name must contain only lowercase letters, numbers, dashes, and underscores.' }
+    if (!name || !VALID_WIKI_NAME.test(name)) {
+      return { error: 'Wiki name must contain only lowercase letters, numbers, dashes, and underscores.' }
     }
 
     const dataDir = this.config.getDataDir()
-    const kbDir = path.join(dataDir, name, 'docs')
+    const wikiDir = path.join(dataDir, name, 'docs')
 
-    if (fs.existsSync(kbDir)) {
-      return { error: `Knowledge base "${name}" already exists.` }
+    if (fs.existsSync(wikiDir)) {
+      return { error: `Wiki "${name}" already exists.` }
     }
 
-    fs.mkdirSync(kbDir, { recursive: true })
+    fs.mkdirSync(wikiDir, { recursive: true })
     return { name }
   }
 
   delete(name: string): { deleted: string } | { error: string } {
     const dataDir = this.config.getDataDir()
-    const kbDir = path.join(dataDir, name)
+    const wikiDir = path.join(dataDir, name)
 
-    if (!fs.existsSync(path.join(kbDir, 'docs'))) {
-      return { error: `Knowledge base "${name}" does not exist.` }
+    if (!fs.existsSync(path.join(wikiDir, 'docs'))) {
+      return { error: `Wiki "${name}" does not exist.` }
     }
 
-    fs.rmSync(kbDir, { recursive: true, force: true })
+    fs.rmSync(wikiDir, { recursive: true, force: true })
     return { deleted: name }
   }
 

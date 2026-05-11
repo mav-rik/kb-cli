@@ -3,41 +3,41 @@ import * as path from 'node:path'
 import { Controller, Cli, Param, CliOption, Description } from '@moostjs/event-cli'
 import { services } from '../services/container.js'
 
-@Controller('kb')
-export class KbController {
+@Controller('wiki')
+export class WikiController {
   private get config() { return services.config }
-  private get kbMgmt() { return services.kbManagement }
+  private get wikiMgmt() { return services.wikiManagement }
 
   @Cli('create/:name')
-  @Description('Create a new knowledge base')
+  @Description('Create a new wiki')
   create(@Param('name') name: string) {
-    const result = this.kbMgmt.create(name)
+    const result = this.wikiMgmt.create(name)
     if ('error' in result) return `Error: ${result.error}`
-    return `Created knowledge base "${name}".`
+    return `Created wiki "${name}".`
   }
 
   @Cli('use/:name')
-  @Description('Set the default knowledge base')
+  @Description('Set the default wiki')
   use(@Param('name') name: string) {
-    if (!this.kbMgmt.exists(name)) {
-      return `Error: Knowledge base "${name}" does not exist. Run \`aimem kb create ${name}\` first.`
+    if (!this.wikiMgmt.exists(name)) {
+      return `Error: Wiki "${name}" does not exist. Run \`kb wiki create ${name}\` first.`
     }
-    this.config.set('defaultKb', name)
-    return `Default knowledge base set to "${name}".`
+    this.config.set('defaultWiki', name)
+    return `Default wiki set to "${name}".`
   }
 
   @Cli('list')
-  @Description('List all knowledge bases')
+  @Description('List all wikis')
   list() {
-    const kbs = this.kbMgmt.list()
-    if (kbs.length === 0) {
-      return 'No knowledge bases found.'
+    const wikis = this.wikiMgmt.list()
+    if (wikis.length === 0) {
+      return 'No wikis found.'
     }
 
     const dataDir = this.config.getDataDir()
     const lines = ['Name         | Docs | DB Size  | Docs Size', '-------------|------|----------|----------']
 
-    for (const name of kbs) {
+    for (const name of wikis) {
       const docsDir = path.join(dataDir, name, 'docs')
       const dbPath = path.join(dataDir, name, 'index.db')
 
@@ -60,27 +60,27 @@ export class KbController {
   }
 
   @Cli('delete/:name')
-  @Description('Delete a knowledge base')
+  @Description('Delete a wiki')
   delete(
     @Param('name') name: string,
     @CliOption('force', 'f')
-    @Description('Force delete even for default KB')
+    @Description('Force delete even for default wiki')
     force?: boolean,
   ) {
     if (name === 'default' && !force) {
-      return 'Error: Cannot delete the "default" KB without --force flag.'
+      return 'Error: Cannot delete the "default" wiki without --force flag.'
     }
 
-    const result = this.kbMgmt.delete(name)
+    const result = this.wikiMgmt.delete(name)
     if ('error' in result) return `Error: ${result.error}`
-    return `Deleted knowledge base "${name}".`
+    return `Deleted wiki "${name}".`
   }
 
   @Cli('info/:name')
-  @Description('Show info about a knowledge base')
+  @Description('Show info about a wiki')
   info(@Param('name') name: string) {
-    if (!this.kbMgmt.exists(name)) {
-      return `Error: Knowledge base "${name}" does not exist.`
+    if (!this.wikiMgmt.exists(name)) {
+      return `Error: Wiki "${name}" does not exist.`
     }
 
     const dataDir = this.config.getDataDir()
@@ -104,7 +104,7 @@ export class KbController {
     }
 
     const lines = [
-      `Knowledge base: ${name}`,
+      `Wiki: ${name}`,
       `Documents: ${fileCount}`,
       `Total size: ${formatBytes(totalSize)}`,
       `Last modified: ${fileCount > 0 ? lastModified.toISOString() : 'N/A'}`,

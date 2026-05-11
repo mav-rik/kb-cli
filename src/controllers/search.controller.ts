@@ -16,10 +16,10 @@ export class SearchController {
     @Param('query') query: string,
     @Description('Max results') @CliOption('limit', 'n') @Optional() limit: string,
     @Description('Output format') @CliOption('format') @Optional() format: string,
-    @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string | object> {
     const parsedLimit = limit ? parseInt(limit, 10) : 10
-    const resolvedKb = this.config.resolveKb(kb)
+    const resolvedKb = this.config.resolveWiki(wiki)
 
     const results = await this.searchService.search(resolvedKb, query, parsedLimit)
 
@@ -40,15 +40,15 @@ export class SearchController {
     @Param('id') id: string,
     @Description('Max results') @CliOption('limit', 'n') @Optional() limit: string,
     @Description('Output format') @CliOption('format') @Optional() format: string,
-    @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string | object> {
     const parsedLimit = limit ? parseInt(limit, 10) : 10
-    const resolvedKb = this.config.resolveKb(kb)
+    const resolvedKb = this.config.resolveWiki(wiki)
     const filename = toFilename(id)
     const docId = toDocId(filename)
 
     if (!this.storage.docExists(resolvedKb, filename)) {
-      return `Error: Document "${filename}" not found in KB "${resolvedKb}".`
+      return `Error: Document "${filename}" not found in wiki "${resolvedKb}".`
     }
 
     const scored = await this.workflow.findRelated(resolvedKb, docId, filename, parsedLimit)

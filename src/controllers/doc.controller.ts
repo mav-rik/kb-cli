@@ -23,14 +23,14 @@ export class DocController {
     @Description('Content') @CliOption('content') @Optional() content: string,
     @Description('File to ingest') @CliOption('file') @Optional() file: string,
     @Description('Read from stdin') @CliOption('stdin') stdin: boolean,
-    @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
-    const kbName = this.config.resolveKb(kb)
+    const kbName = this.config.resolveWiki(wiki)
     const id = slugify(title)
     const filename = `${id}.md`
 
     if (this.storage.docExists(kbName, filename)) {
-      return `Error: Document "${filename}" already exists in KB "${kbName}".`
+      return `Error: Document "${filename}" already exists in wiki "${kbName}".`
     }
 
     let body = ''
@@ -94,14 +94,14 @@ export class DocController {
     @Description('New tags') @CliOption('tags') @Optional() tags: string,
     @Description('Replace content') @CliOption('content') @Optional() content: string,
     @Description('Append content') @CliOption('append') @Optional() append: string,
-    @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
-    const kbName = this.config.resolveKb(kb)
+    const kbName = this.config.resolveWiki(wiki)
     const filename = toFilename(id)
     const docId = toDocId(filename)
 
     if (!this.storage.docExists(kbName, filename)) {
-      return `Error: Document "${filename}" not found in KB "${kbName}".`
+      return `Error: Document "${filename}" not found in wiki "${kbName}".`
     }
 
     const doc = this.storage.readDoc(kbName, filename)
@@ -132,14 +132,14 @@ export class DocController {
   @Description('Delete a document')
   async delete(
     @Param('id') id: string,
-    @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
-    const kbName = this.config.resolveKb(kb)
+    const kbName = this.config.resolveWiki(wiki)
     const filename = toFilename(id)
     const docId = toDocId(filename)
 
     if (!this.storage.docExists(kbName, filename)) {
-      return `Error: Document "${filename}" not found in KB "${kbName}".`
+      return `Error: Document "${filename}" not found in wiki "${kbName}".`
     }
 
     const backlinks = await this.index.getLinksTo(kbName, docId)
@@ -165,18 +165,18 @@ export class DocController {
   async rename(
     @Param('oldId') oldId: string,
     @Param('newId') newId: string,
-    @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
-    const kbName = this.config.resolveKb(kb)
+    const kbName = this.config.resolveWiki(wiki)
     const oldFilename = `${oldId}.md`
     const newFilename = `${newId}.md`
 
     if (!this.storage.docExists(kbName, oldFilename)) {
-      return `Error: Document "${oldFilename}" not found in KB "${kbName}".`
+      return `Error: Document "${oldFilename}" not found in wiki "${kbName}".`
     }
 
     if (this.storage.docExists(kbName, newFilename)) {
-      return `Error: Document "${newFilename}" already exists in KB "${kbName}".`
+      return `Error: Document "${newFilename}" already exists in wiki "${kbName}".`
     }
 
     const doc = this.storage.readDoc(kbName, oldFilename)
@@ -225,9 +225,9 @@ export class DocController {
     @Description('Filter by category') @CliOption('category', 'c') @Optional() category: string,
     @Description('Filter by tag') @CliOption('tag') @Optional() tag: string,
     @Description('Output format') @CliOption('format') @Optional() format: string,
-    @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string | object> {
-    const kbName = this.config.resolveKb(kb)
+    const kbName = this.config.resolveWiki(wiki)
 
     const docs = await this.index.listDocs(kbName, { category, tag })
 
@@ -253,9 +253,9 @@ export class DocController {
   @Cli('categories')
   @Description('List all categories in use')
   async categories(
-    @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
-    const kbName = this.config.resolveKb(kb)
+    const kbName = this.config.resolveWiki(wiki)
     const docs = await this.index.listDocs(kbName)
     const cats = [...new Set(docs.map((d) => d.category).filter(Boolean))].sort()
     if (cats.length === 0) return 'No categories found.'

@@ -14,13 +14,13 @@ export class ReadController {
     @Description('Show metadata only') @CliOption('meta', 'm') meta: boolean,
     @Description('List outgoing links') @CliOption('links') links: boolean,
     @Description('Follow a link') @CliOption('follow', 'f') @Optional() follow: string,
-    @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ) {
-    const kbName = this.config.resolveKb(kb)
+    const kbName = this.config.resolveWiki(wiki)
     const targetPath = follow ? follow.replace(/^\.\//, '') : docPath
 
     if (!this.storage.docExists(kbName, targetPath)) {
-      return `Error: Document "${targetPath}" not found in KB "${kbName}".`
+      return `Error: Document "${targetPath}" not found in wiki "${kbName}".`
     }
 
     const doc = this.storage.readDoc(kbName, targetPath)

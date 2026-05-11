@@ -8,7 +8,7 @@ import { VectorService } from './vector.service.js'
 import { FtsService } from './fts.service.js'
 import { SearchService } from './search.service.js'
 import { DocWorkflowService } from './doc-workflow.service.js'
-import { KbManagementService } from './kb-management.service.js'
+import { WikiManagementService } from './wiki-management.service.js'
 import { ActivityLogService } from './activity-log.service.js'
 import { SchemaService } from './schema.service.js'
 
@@ -23,7 +23,7 @@ class ServiceContainer {
   readonly fts: FtsService
   readonly search: SearchService
   readonly docWorkflow: DocWorkflowService
-  readonly kbManagement: KbManagementService
+  readonly wikiManagement: WikiManagementService
   readonly activityLog: ActivityLogService
   readonly schema: SchemaService
 
@@ -35,7 +35,7 @@ class ServiceContainer {
     this.linker = new LinkerService(this.storage, this.parser, this.index)
     this.search = new SearchService(this.embedding, this.vector, this.fts, this.index, this.storage)
     this.docWorkflow = new DocWorkflowService(this.parser, this.index, this.linker, this.embedding, this.vector, this.fts, this.storage)
-    this.kbManagement = new KbManagementService(this.config)
+    this.wikiManagement = new WikiManagementService(this.config)
     this.activityLog = new ActivityLogService(this.config)
     this.schema = new SchemaService(this.config, this.index, this.storage)
   }

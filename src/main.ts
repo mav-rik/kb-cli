@@ -1,5 +1,5 @@
 import { CliApp, Controller, Cli, CliOption, Description, Optional } from '@moostjs/event-cli'
-import { KbController } from './controllers/kb.controller.js'
+import { WikiController } from './controllers/wiki.controller.js'
 import { ConfigController } from './controllers/config.controller.js'
 import { ReadController } from './controllers/read.controller.js'
 import { DocController } from './controllers/doc.controller.js'
@@ -15,9 +15,9 @@ class AppController {
   @Description('Show help')
   root() {
     const lines = [
-      'AI Memory - Knowledge base CLI for AI agents',
+      'kb — Wiki CLI for AI agents',
       '',
-      'Usage: aimem <command> [options]',
+      'Usage: kb <command> [options]',
       '',
       'Commands:',
       '  search <query>     Search documents (hybrid semantic + keyword)',
@@ -29,13 +29,13 @@ class AppController {
       '  list               List documents (--category, --tag)',
       '  categories         List categories in use',
       '  related <id>       Find related documents',
-      '  lint               Check KB integrity (--fix)',
+      '  lint               Check wiki integrity (--fix)',
       '  reindex            Rebuild index from files',
       '  toc                Show table of contents',
       '  log                Show recent activity log',
-      '  schema             Show KB schema (structure, conventions)',
+      '  schema             Show wiki schema (structure, conventions)',
       '  schema update      Regenerate schema from current state',
-      '  kb <cmd>           Manage knowledge bases (create/list/info/delete/use)',
+      '  wiki <cmd>         Manage wikis (create/list/info/delete/use)',
       '  config <cmd>       Manage configuration (get/set/list)',
       '  skill [workflow]   Show agent instructions',
       '  setup              Install agent integrations',
@@ -43,7 +43,7 @@ class AppController {
       '  version            Show version',
       '',
       'Global options:',
-      '  --kb <name>        Target knowledge base (default: from aimem.config.json or "default")',
+      '  --wiki, -w <name>  Target wiki (default: from kb.config.json or "default")',
       '  --format json      Machine-readable output',
       '  --help             Show help for a command',
     ]
@@ -70,7 +70,7 @@ class AppController {
 }
 
 new CliApp()
-  .controllers(AppController, KbController, ConfigController, ReadController, DocController, SearchController, LintController, SkillController, SetupController)
-  .useHelp({ name: 'aimem', title: 'AI Memory - Knowledge base CLI for AI agents' })
+  .controllers(AppController, WikiController, ConfigController, ReadController, DocController, SearchController, LintController, SkillController, SetupController)
+  .useHelp({ name: 'kb', title: 'kb — Wiki CLI for AI agents' })
   .useOptions([{ keys: ['help'], description: 'Display instructions.' }])
   .start()

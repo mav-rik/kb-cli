@@ -1,11 +1,11 @@
 {
-  "name": "ai-memory",
+  "name": "kb-cli",
   "version": "0.1.0",
-  "description": "AI memory management CLI",
+  "description": "Knowledge base CLI for AI agents",
   "type": "module",
   "main": "dist/main.js",
   "bin": {
-    "aimem": "./bin.js"
+    "kb": "./bin.js"
   },
   "files": [
     "dist",

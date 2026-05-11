@@ -2,18 +2,18 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 
-export interface AiMemoryConfig {
-  defaultKb: string
+export interface KbCliConfig {
+  defaultWiki: string
   embeddingModel: string
 }
 
-const DEFAULT_CONFIG: AiMemoryConfig = {
-  defaultKb: 'default',
+const DEFAULT_CONFIG: KbCliConfig = {
+  defaultWiki: 'default',
   embeddingModel: 'all-MiniLM-L6-v2',
 }
 
 export interface CwdConfig {
-  kb?: string
+  wiki?: string
 }
 
 export class ConfigService {
@@ -26,7 +26,7 @@ export class ConfigService {
   }
 
   getDataDir(): string {
-    return path.join(os.homedir(), '.ai-memory')
+    return path.join(os.homedir(), '.kb')
   }
 
   private ensureDataDir(): void {
@@ -40,7 +40,7 @@ export class ConfigService {
     let dir = process.cwd()
     const root = path.parse(dir).root
     while (dir !== root) {
-      const configPath = path.join(dir, 'aimem.config.json')
+      const configPath = path.join(dir, 'kb.config.json')
       if (fs.existsSync(configPath)) {
         try {
           return JSON.parse(fs.readFileSync(configPath, 'utf-8'))
@@ -53,13 +53,13 @@ export class ConfigService {
     return null
   }
 
-  resolveKb(explicit?: string): string {
+  resolveWiki(explicit?: string): string {
     if (explicit) return explicit
-    if (this.cwdConfig?.kb) return this.cwdConfig.kb
-    return this.get('defaultKb')
+    if (this.cwdConfig?.wiki) return this.cwdConfig.wiki
+    return this.get('defaultWiki')
   }
 
-  loadConfig(): AiMemoryConfig {
+  loadConfig(): KbCliConfig {
     this.ensureDataDir()
     if (!fs.existsSync(this.configPath)) {
       return { ...DEFAULT_CONFIG }
@@ -68,17 +68,17 @@ export class ConfigService {
     return { ...DEFAULT_CONFIG, ...JSON.parse(raw) }
   }
 
-  saveConfig(config: AiMemoryConfig): void {
+  saveConfig(config: KbCliConfig): void {
     this.ensureDataDir()
     fs.writeFileSync(this.configPath, JSON.stringify(config, null, 2), 'utf-8')
   }
 
-  get(key: keyof AiMemoryConfig): string {
+  get(key: keyof KbCliConfig): string {
     const config = this.loadConfig()
     return config[key]
   }
 
-  set(key: keyof AiMemoryConfig, value: string): void {
+  set(key: keyof KbCliConfig, value: string): void {
     const config = this.loadConfig()
     config[key] = value
     this.saveConfig(config)

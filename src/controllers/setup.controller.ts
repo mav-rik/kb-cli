@@ -16,8 +16,8 @@ interface AgentConfig {
 function appendOrCreate(filePath: string, content: string, label: string): string[] {
   if (fs.existsSync(filePath)) {
     const existing = fs.readFileSync(filePath, 'utf-8')
-    if (existing.includes('aimem')) {
-      return [`  ${label} already contains aimem (skipped)`]
+    if (existing.includes('kb')) {
+      return [`  ${label} already contains kb (skipped)`]
     }
     fs.appendFileSync(filePath, '\n\n' + content)
   } else {
@@ -32,19 +32,19 @@ const AGENTS: AgentConfig[] = [
     name: 'Claude Code',
     install: (cwd: string) => {
       const msgs: string[] = []
-      const skillDir = path.join(cwd, '.claude', 'skills', 'aimem')
+      const skillDir = path.join(cwd, '.claude', 'skills', 'kb')
       fs.mkdirSync(skillDir, { recursive: true })
-      fs.copyFileSync(path.join(setupDir, 'claude-skill.md'), path.join(skillDir, 'aimem.md'))
-      msgs.push(`  .claude/skills/aimem/aimem.md`)
+      fs.copyFileSync(path.join(setupDir, 'claude-skill.md'), path.join(skillDir, 'kb.md'))
+      msgs.push(`  .claude/skills/kb/kb.md`)
 
       const cmdDir = path.join(cwd, '.claude', 'commands')
       fs.mkdirSync(cmdDir, { recursive: true })
-      fs.copyFileSync(path.join(setupDir, 'claude-cmd-ingest.md'), path.join(cmdDir, 'aimem-ingest.md'))
-      fs.copyFileSync(path.join(setupDir, 'claude-cmd-search.md'), path.join(cmdDir, 'aimem-search.md'))
-      fs.copyFileSync(path.join(setupDir, 'claude-cmd-lint.md'), path.join(cmdDir, 'aimem-lint.md'))
-      msgs.push(`  .claude/commands/aimem-ingest.md`)
-      msgs.push(`  .claude/commands/aimem-search.md`)
-      msgs.push(`  .claude/commands/aimem-lint.md`)
+      fs.copyFileSync(path.join(setupDir, 'claude-cmd-ingest.md'), path.join(cmdDir, 'kb-ingest.md'))
+      fs.copyFileSync(path.join(setupDir, 'claude-cmd-search.md'), path.join(cmdDir, 'kb-search.md'))
+      fs.copyFileSync(path.join(setupDir, 'claude-cmd-lint.md'), path.join(cmdDir, 'kb-lint.md'))
+      msgs.push(`  .claude/commands/kb-ingest.md`)
+      msgs.push(`  .claude/commands/kb-search.md`)
+      msgs.push(`  .claude/commands/kb-lint.md`)
       return msgs
     },
   },
@@ -54,8 +54,8 @@ const AGENTS: AgentConfig[] = [
     install: (cwd: string) => {
       const rulesDir = path.join(cwd, '.cursor', 'rules')
       fs.mkdirSync(rulesDir, { recursive: true })
-      fs.copyFileSync(path.join(setupDir, 'cursor-rules.md'), path.join(rulesDir, 'aimem.mdc'))
-      return [`  .cursor/rules/aimem.mdc`]
+      fs.copyFileSync(path.join(setupDir, 'cursor-rules.md'), path.join(rulesDir, 'kb.mdc'))
+      return [`  .cursor/rules/kb.mdc`]
     },
   },
   {
@@ -88,8 +88,8 @@ const AGENTS: AgentConfig[] = [
     install: (cwd: string) => {
       const rulesDir = path.join(cwd, '.continue', 'rules')
       fs.mkdirSync(rulesDir, { recursive: true })
-      fs.copyFileSync(path.join(setupDir, 'generic-rules.md'), path.join(rulesDir, 'aimem.md'))
-      return [`  .continue/rules/aimem.md`]
+      fs.copyFileSync(path.join(setupDir, 'generic-rules.md'), path.join(rulesDir, 'kb.md'))
+      return [`  .continue/rules/kb.md`]
     },
   },
 ]
@@ -99,7 +99,7 @@ export class SetupController {
   private get config() { return services.config }
 
   @Cli('setup')
-  @Description('Set up aimem integration for AI agents in current directory')
+  @Description('Set up kb integration for AI agents in current directory')
   setup(
     @Description('Agents to install (comma-separated: claude,cursor,codex,cline,windsurf,continue)')
     @CliOption('agents', 'a') @Optional() agents: string,
@@ -120,18 +120,18 @@ export class SetupController {
         output.push(`Warning: Unknown agents: ${unknown.join(', ')}`)
       }
     } else {
-      output.push('aimem setup — Install AI agent integrations')
+      output.push('kb setup — Install AI agent integrations')
       output.push('')
       output.push('Usage:')
-      output.push('  aimem setup --agents claude,cursor    # specific agents')
-      output.push('  aimem setup --all                     # all agents')
+      output.push('  kb setup --agents claude,cursor    # specific agents')
+      output.push('  kb setup --all                     # all agents')
       output.push('')
       output.push('Supported agents:')
       for (const agent of AGENTS) {
         output.push(`  ${agent.id.padEnd(10)} — ${agent.name}`)
       }
       output.push('')
-      output.push('Example: aimem setup --agents claude')
+      output.push('Example: kb setup --agents claude')
       return output.join('\n')
     }
 
@@ -139,7 +139,7 @@ export class SetupController {
       return 'No valid agents specified.'
     }
 
-    output.push('Installing aimem integrations...')
+    output.push('Installing kb integrations...')
     output.push('')
 
     for (const agent of toInstall) {
@@ -149,14 +149,14 @@ export class SetupController {
       output.push('')
     }
 
-    const configPath = path.join(cwd, 'aimem.config.json')
+    const configPath = path.join(cwd, 'kb.config.json')
     if (!fs.existsSync(configPath)) {
-      const defaultKb = this.config.get('defaultKb')
-      fs.writeFileSync(configPath, JSON.stringify({ kb: defaultKb }, null, 2) + '\n')
-      output.push(`Created aimem.config.json (kb: "${defaultKb}")`)
+      const defaultWiki = this.config.get('defaultWiki')
+      fs.writeFileSync(configPath, JSON.stringify({ wiki: defaultWiki }, null, 2) + '\n')
+      output.push(`Created kb.config.json (wiki: "${defaultWiki}")`)
     }
 
-    output.push('Done! Agents can now use `aimem` commands.')
+    output.push('Done! Agents can now use `kb` commands.')
     return output.join('\n')
   }
 }
