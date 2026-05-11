@@ -26,7 +26,6 @@ export class FtsService {
         title,
         tags,
         content,
-        content='',
         tokenize='porter unicode61'
       )
     `)
@@ -37,21 +36,8 @@ export class FtsService {
     this.ensureTables(kb)
     const tagsStr = tags.join(' ')
 
-    // Delete old entry if exists (requires original text — use stored approach)
-    // For contentless FTS, we use the 'delete' command with rowid
-    // First check if entry exists by searching for the id
-    const existing = db.prepare(
-      `SELECT rowid FROM documents_fts WHERE id = ?`
-    ).get(id) as { rowid: number } | undefined
-
-    if (existing) {
-      // For contentless tables, delete by rowid using the special command
-      // We need the original content — but we don't have it stored
-      // Instead, drop and re-insert (safe because we control all writes)
-      db.prepare(
-        `INSERT INTO documents_fts(documents_fts, rowid) VALUES('delete', ?)`
-      ).run(existing.rowid)
-    }
+    // Delete existing entry by id
+    db.prepare(`DELETE FROM documents_fts WHERE id = ?`).run(id)
 
     db.prepare(
       `INSERT INTO documents_fts(id, title, tags, content) VALUES(?, ?, ?, ?)`
@@ -61,16 +47,7 @@ export class FtsService {
   delete(kb: string, id: string): void {
     const db = this.getDb(kb)
     this.ensureTables(kb)
-
-    const existing = db.prepare(
-      `SELECT rowid FROM documents_fts WHERE id = ?`
-    ).get(id) as { rowid: number } | undefined
-
-    if (existing) {
-      db.prepare(
-        `INSERT INTO documents_fts(documents_fts, rowid) VALUES('delete', ?)`
-      ).run(existing.rowid)
-    }
+    db.prepare(`DELETE FROM documents_fts WHERE id = ?`).run(id)
   }
 
   search(kb: string, query: string, limit: number = 20): { id: string; rank: number }[] {
