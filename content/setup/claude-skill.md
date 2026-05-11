@@ -1,23 +1,23 @@
 ---
-name: aimem
-description: Manage persistent knowledge via the aimem CLI. Use when storing, retrieving, updating, or searching knowledge that should persist across conversations. Triggers on remember, store, recall, look up, find in memory, organize knowledge.
+name: kb
+description: Manage persistent wiki via the kb CLI. Use when storing, retrieving, updating, or searching knowledge that should persist across conversations. Triggers on remember, store, recall, look up, find in memory, organize knowledge.
 ---
 
-# aimem
+# kb
 
-Run `aimem skill` to see full instructions. Run workflow-specific guides:
-- `aimem skill ingest` — how to store new knowledge
-- `aimem skill search` — how to find and retrieve knowledge
-- `aimem skill update` — how to modify/reorganize knowledge
-- `aimem skill lint` — how to maintain KB health
+Run `kb skill` to see full instructions. Run workflow-specific guides:
+- `kb skill ingest` — how to store new knowledge
+- `kb skill search` — how to find and retrieve knowledge
+- `kb skill update` — how to modify/reorganize knowledge
+- `kb skill lint` — how to maintain wiki health
 
 Quick reference:
 ```bash
-aimem search "<query>"              # find knowledge
-aimem read <filename>               # read document
-aimem add --title "..." --category <cat> --tags "..." --content "..."
-aimem update <id> --append "..."    # add to existing
-aimem lint                          # check health
+kb search "<query>"              # find knowledge
+kb read <filename>               # read document
+kb add --title "..." --category <cat> --tags "..." --content "..."
+kb update <id> --append "..."    # add to existing
+kb lint                          # check health
 ```
 
 Key rules:

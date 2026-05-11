@@ -7,15 +7,15 @@ Follow these steps when updating, renaming, or reorganizing documents.
 **CLI:**
 ```bash
 # Append new information
-aimem update <id> --append "\n\n## New Section\n\nNew content here"
+kb update <id> --append "\n\n## New Section\n\nNew content here"
 
 # Replace entire content
-aimem update <id> --content "complete new content"
+kb update <id> --content "complete new content"
 
 # Change metadata only
-aimem update <id> --title "Better Title"
-aimem update <id> --category new-category
-aimem update <id> --tags "new,tags"
+kb update <id> --title "Better Title"
+kb update <id> --category new-category
+kb update <id> --tags "new,tags"
 ```
 
 **API:**
@@ -42,8 +42,8 @@ Check for docs that might now be outdated:
 
 **CLI:**
 ```bash
-aimem related <id>
-aimem search "<key changed facts>"
+kb related <id>
+kb search "<key changed facts>"
 ```
 
 **API:**
@@ -56,7 +56,7 @@ Read each related doc. Fix any contradictions:
 
 **CLI:**
 ```bash
-aimem update <related-id> --content "corrected content"
+kb update <related-id> --content "corrected content"
 ```
 
 **API:**
@@ -69,7 +69,7 @@ body: { "content": "corrected content" }
 
 **CLI:**
 ```bash
-aimem rename <old-id> <new-id>
+kb rename <old-id> <new-id>
 ```
 
 **API:**
@@ -87,7 +87,7 @@ This automatically:
 
 **CLI:**
 ```bash
-aimem delete <id>
+kb delete <id>
 ```
 
 **API:**
@@ -99,7 +99,7 @@ If other docs linked to it, they'll be warned about broken links. Fix them:
 
 **CLI:**
 ```bash
-aimem lint --fix
+kb lint --fix
 ```
 
 **API:**
@@ -113,7 +113,7 @@ Change a doc's category:
 
 **CLI:**
 ```bash
-aimem update <id> --category new-category
+kb update <id> --category new-category
 ```
 
 **API:**

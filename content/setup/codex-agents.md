@@ -1,14 +1,14 @@
-# AI Memory (aimem)
+# AI Memory (kb)
 
-This project uses `aimem` for persistent knowledge management.
+This project uses `kb` for persistent knowledge management.
 
-Run `aimem skill` for full usage instructions. Run `aimem skill ingest` for the ingestion workflow, `aimem skill search` for retrieval.
+Run `kb skill` for full usage instructions. Run `kb skill ingest` for the ingestion workflow, `kb skill search` for retrieval.
 
 Key commands:
-- `aimem search "<query>"` — find knowledge
-- `aimem read <filename>` — read a document
-- `aimem add --title "..." --category <cat> --tags "..." --content "..."` — store
-- `aimem update <id> --append "..."` — update
-- `aimem lint` — check health
+- `kb search "<query>"` — find knowledge
+- `kb read <filename>` — read a document
+- `kb add --title "..." --category <cat> --tags "..." --content "..."` — store
+- `kb update <id> --append "..."` — update
+- `kb lint` — check health
 
 Rules: search before adding, cross-link related docs, sync related knowledge after mutations.

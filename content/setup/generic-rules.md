@@ -1,7 +1,7 @@
-This project uses `aimem` for persistent knowledge management.
+This project uses `kb` for persistent knowledge management.
 
-Run `aimem skill` for full usage instructions.
+Run `kb skill` for full usage instructions.
 
-Key commands: `aimem search`, `aimem read`, `aimem add`, `aimem update`, `aimem lint`.
+Key commands: `kb search`, `kb read`, `kb add`, `kb update`, `kb lint`.
 
 Rules: search before adding, cross-link related docs, sync related knowledge after mutations.

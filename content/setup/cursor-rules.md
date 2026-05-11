@@ -4,19 +4,19 @@ globs: "**/*"
 alwaysApply: true
 ---
 
-# AI Memory (aimem)
+# AI Memory (kb)
 
-This project uses `aimem` for persistent knowledge management. The CLI is globally installed.
+This project uses `kb` for persistent knowledge management. The CLI is globally installed.
 
 ## Usage
 
-Run `aimem skill` in the terminal for full instructions. Key commands:
+Run `kb skill` in the terminal for full instructions. Key commands:
 
-- `aimem search "<query>"` — find knowledge (semantic + keyword)
-- `aimem read <filename>` — read a document
-- `aimem add --title "..." --category <cat> --tags "..." --content "..."` — store new knowledge
-- `aimem update <id> --append "..."` — add to existing document
-- `aimem lint` — check knowledge base health
+- `kb search "<query>"` — find knowledge (semantic + keyword)
+- `kb read <filename>` — read a document
+- `kb add --title "..." --category <cat> --tags "..." --content "..."` — store new knowledge
+- `kb update <id> --append "..."` — add to existing document
+- `kb lint` — check knowledge base health
 
 ## Rules
 

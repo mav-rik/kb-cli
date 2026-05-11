@@ -6,7 +6,7 @@ Follow these steps when looking up information from the knowledge base.
 
 **CLI:**
 ```bash
-aimem search "<natural language query>"
+kb search "<natural language query>"
 ```
 
 **API:**
@@ -20,9 +20,9 @@ Returns ranked results: ID, title, category, relevance score, and a snippet.
 
 **CLI:**
 ```bash
-aimem read <filename>
-aimem read <filename> --lines 1-80     # chunked reading
-aimem read <filename> --lines 81-160
+kb read <filename>
+kb read <filename> --lines 1-80     # chunked reading
+kb read <filename> --lines 81-160
 ```
 
 **API:**
@@ -36,9 +36,9 @@ GET /api/read/<filename>?kb=<name>&format=json    # structured response
 
 **CLI:**
 ```bash
-aimem read <filename> --links          # list outgoing links
-aimem read <filename> --follow "./linked-doc.md"
-aimem related <id>                     # semantically similar docs
+kb read <filename> --links          # list outgoing links
+kb read <filename> --follow "./linked-doc.md"
+kb related <id>                     # semantically similar docs
 ```
 
 **API:**
@@ -51,8 +51,8 @@ GET /api/docs/<id>/related?kb=<name>&limit=10
 
 **CLI:**
 ```bash
-aimem categories
-aimem list --category <category>
+kb categories
+kb list --category <category>
 ```
 
 **API:**
@@ -67,7 +67,7 @@ If you synthesized a substantial answer by combining information from multiple d
 
 **CLI:**
 ```bash
-aimem add --title "How Auth System Works" --category concepts --tags "auth,architecture" --content "<synthesized answer with links>"
+kb add --title "How Auth System Works" --category concepts --tags "auth,architecture" --content "<synthesized answer with links>"
 ```
 
 **API:**

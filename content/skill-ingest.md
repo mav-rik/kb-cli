@@ -16,7 +16,7 @@ Before starting, assess the input:
 
 **CLI:**
 ```bash
-aimem search "<key concepts from the new information>"
+kb search "<key concepts from the new information>"
 ```
 
 **API:**
@@ -30,7 +30,7 @@ If a highly relevant doc exists (score > 0.03), go to Step 2a. Otherwise Step 2b
 
 **CLI:**
 ```bash
-aimem read <filename>
+kb read <filename>
 ```
 
 **API:**
@@ -41,8 +41,8 @@ GET /api/read/<filename>?kb=<name>
 Review the existing content. Then either:
 
 **CLI:**
-- Append new info: `aimem update <id> --append "\n\n## New Section\n\ncontent..."`
-- Replace with merged content: `aimem update <id> --content "full merged content"`
+- Append new info: `kb update <id> --append "\n\n## New Section\n\ncontent..."`
+- Replace with merged content: `kb update <id> --content "full merged content"`
 
 **API:**
 ```
@@ -58,8 +58,8 @@ Check existing categories and schema:
 
 **CLI:**
 ```bash
-aimem categories
-aimem schema
+kb categories
+kb schema
 ```
 
 **API:**
@@ -72,7 +72,7 @@ Create the document:
 
 **CLI:**
 ```bash
-aimem add --title "Descriptive Title" --category <category> --tags "tag1,tag2" --content "content with [links](./related-doc.md)"
+kb add --title "Descriptive Title" --category <category> --tags "tag1,tag2" --content "content with [links](./related-doc.md)"
 ```
 
 **API:**
@@ -111,14 +111,14 @@ For each page to create or update:
 **CLI:**
 ```bash
 # Check if it exists
-aimem search "<entity/concept name>"
+kb search "<entity/concept name>"
 
 # If exists: read and update
-aimem read <filename>
-aimem update <id> --append "\n\n## From [Source Title]\n\nnew information..."
+kb read <filename>
+kb update <id> --append "\n\n## From [Source Title]\n\nnew information..."
 
 # If new: create with links to related pages
-aimem add --title "Entity Name" --category <category> --tags "..." --content "..."
+kb add --title "Entity Name" --category <category> --tags "..." --content "..."
 ```
 
 **API:**
@@ -139,7 +139,7 @@ For substantial sources, create a summary page that links to all the pages it to
 
 **CLI:**
 ```bash
-aimem add --title "Summary: Source Title" --category summaries --tags "summary,source-name" --content "## Key takeaways\n\n- Point 1 (see [Entity](./entity.md))\n- Point 2 (see [Concept](./concept.md))\n..."
+kb add --title "Summary: Source Title" --category summaries --tags "summary,source-name" --content "## Key takeaways\n\n- Point 1 (see [Entity](./entity.md))\n- Point 2 (see [Concept](./concept.md))\n..."
 ```
 
 **API:**
@@ -150,11 +150,11 @@ body: { "title": "Summary: Source Title", "category": "summaries", "tags": ["sum
 
 ### Step 5D: Cross-link everything
 
-Every page created or updated should link to related pages. Use `aimem related <id>` to find candidates:
+Every page created or updated should link to related pages. Use `kb related <id>` to find candidates:
 
 **CLI:**
 ```bash
-aimem related <new-doc-id>
+kb related <new-doc-id>
 ```
 
 **API:**
@@ -166,7 +166,7 @@ Update related docs to link back:
 
 **CLI:**
 ```bash
-aimem update <related-id> --append "\n\nSee also: [New Topic](./new-topic.md)"
+kb update <related-id> --append "\n\nSee also: [New Topic](./new-topic.md)"
 ```
 
 **API:**
@@ -185,7 +185,7 @@ Search for docs that might now contain outdated or contradictory information:
 
 **CLI:**
 ```bash
-aimem search "<key facts from new content>"
+kb search "<key facts from new content>"
 ```
 
 **API:**
@@ -199,7 +199,7 @@ Read each result. If any contain stale info, update them.
 
 **CLI:**
 ```bash
-aimem schema update
+kb schema update
 ```
 
 **API:**
@@ -211,7 +211,7 @@ POST /api/schema?kb=<name>
 
 **CLI:**
 ```bash
-aimem lint
+kb lint
 ```
 
 **API:**
@@ -226,7 +226,7 @@ Should report no broken links or drift.
 ## Guidelines
 
 - **Title**: specific and descriptive ("React Query Caching Strategy" not "Notes")
-- **Category**: check `aimem categories` and `aimem schema` first; reuse existing
+- **Category**: check `kb categories` and `kb schema` first; reuse existing
 - **Tags**: 2-5 short keywords for discoverability
 - **Size**: target 50-200 lines per doc; split if larger
 - **Links**: add `[Display Text](./filename.md)` for every related concept
