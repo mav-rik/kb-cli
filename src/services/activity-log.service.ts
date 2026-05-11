@@ -5,7 +5,6 @@ import { ConfigService } from './config.service.js'
 export interface LogEntry {
   timestamp: string
   operation: string
-  kb: string
   docId?: string
   details?: string
 }

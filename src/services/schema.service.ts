@@ -3,14 +3,12 @@ import * as path from 'node:path'
 import { ConfigService } from './config.service.js'
 import { IndexService } from './index.service.js'
 import { StorageService } from './storage.service.js'
-import { ParserService } from './parser.service.js'
 
 export class SchemaService {
   constructor(
     private config: ConfigService,
     private index: IndexService,
     private storage: StorageService,
-    private parser: ParserService,
   ) {}
 
   private getSchemaPath(kb: string): string {
@@ -41,7 +39,7 @@ export class SchemaService {
     // Gather all tags with frequency
     const tagFreq: Record<string, number> = {}
     for (const doc of docs) {
-      const tags = doc.tags ? (Array.isArray(doc.tags) ? doc.tags : []) : []
+      const tags = Array.isArray(doc.tags) ? doc.tags : []
       for (const tag of tags) {
         tagFreq[tag] = (tagFreq[tag] || 0) + 1
       }

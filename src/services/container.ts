@@ -37,7 +37,7 @@ class ServiceContainer {
     this.docWorkflow = new DocWorkflowService(this.parser, this.index, this.linker, this.embedding, this.vector, this.fts, this.storage)
     this.kbManagement = new KbManagementService(this.config)
     this.activityLog = new ActivityLogService(this.config)
-    this.schema = new SchemaService(this.config, this.index, this.storage, this.parser)
+    this.schema = new SchemaService(this.config, this.index, this.storage)
   }
 }
 

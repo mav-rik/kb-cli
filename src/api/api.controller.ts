@@ -7,6 +7,20 @@ import { services } from '../services/container.js'
 import { slugify, toFilename, toDocId, today } from '../utils/slug.js'
 import { DocFrontmatter } from '../services/parser.service.js'
 
+function parseLineRange(text: string, totalLines: number): { start: number; end: number } {
+  const parts = text.split('-')
+  const start = Math.max(1, parseInt(parts[0], 10) || 1)
+  const end = Math.min(totalLines, parseInt(parts[1], 10) || totalLines)
+  return { start, end }
+}
+
+function sliceLines(content: string, lines?: string): string {
+  if (!lines) return content
+  const allLines = content.split('\n')
+  const { start, end } = parseLineRange(lines, allLines.length)
+  return allLines.slice(start - 1, end).join('\n')
+}
+
 @Controller('api')
 export class ApiController {
   private get config() { return services.config }
@@ -40,27 +54,11 @@ export class ApiController {
 
     if (format === 'json') {
       const doc = this.storage.readDoc(resolvedKb, targetPath)
-      let bodyContent = doc.body
-      if (lines) {
-        const bodyLines = doc.body.split('\n')
-        const parts = lines.split('-')
-        const start = Math.max(1, parseInt(parts[0], 10) || 1)
-        const end = Math.min(bodyLines.length, parseInt(parts[1], 10) || bodyLines.length)
-        bodyContent = bodyLines.slice(start - 1, end).join('\n')
-      }
-      return { meta: doc.frontmatter, content: bodyContent, links: doc.links }
+      return { meta: doc.frontmatter, content: sliceLines(doc.body, lines), links: doc.links }
     }
 
     // Default: return raw markdown
-    const raw = this.storage.readRaw(resolvedKb, targetPath)
-    if (lines) {
-      const allLines = raw.split('\n')
-      const parts = lines.split('-')
-      const start = Math.max(1, parseInt(parts[0], 10) || 1)
-      const end = Math.min(allLines.length, parseInt(parts[1], 10) || allLines.length)
-      return allLines.slice(start - 1, end).join('\n')
-    }
-    return raw
+    return sliceLines(this.storage.readRaw(resolvedKb, targetPath), lines)
   }
 
   // ─── Documents CRUD ───────────────────────────────────────────────────────
@@ -187,6 +185,22 @@ export class ApiController {
 
     await this.workflow.removeFromIndex(kbName, toDocId(oldFilename))
     await this.workflow.indexAndEmbed(kbName, newId, frontmatter, doc.body, newFilename)
+
+    // Re-index links for docs that now reference the new filename
+    const files = this.storage.listFiles(kbName)
+    for (const file of files) {
+      if (file === newFilename) continue
+      const fileDoc = this.storage.readDoc(kbName, file)
+      const fileLinks = services.parser.extractLinks(fileDoc.body)
+      if (fileLinks.some((l) => l.target === newFilename)) {
+        const fileId = toDocId(file)
+        await this.index.upsertLinks(
+          kbName,
+          fileId,
+          fileLinks.map((l) => ({ toId: toDocId(l.target), linkText: l.text })),
+        )
+      }
+    }
 
     return { oldId: id, newId, linksUpdated }
   }

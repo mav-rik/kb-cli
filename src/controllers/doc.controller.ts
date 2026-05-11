@@ -242,7 +242,7 @@ export class DocController {
     const header = 'ID | Title | Category | Tags | Updated'
     const separator = '---|-------|----------|------|--------'
     const rows = docs.map((doc) => {
-      const tagsStr = doc.tags ? (Array.isArray(doc.tags) ? doc.tags.join(', ') : doc.tags) : ''
+      const tagsStr = Array.isArray(doc.tags) ? doc.tags.join(', ') : ''
       const updated = doc.updatedAt ? new Date(doc.updatedAt).toISOString().split('T')[0] : ''
       return `${doc.id} | ${doc.title} | ${doc.category} | ${tagsStr} | ${updated}`
     })
