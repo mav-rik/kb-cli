@@ -3,13 +3,28 @@ import * as path from 'node:path'
 import { Controller, Cli, Param, CliOption, Description } from '@moostjs/event-cli'
 import { services } from '../services/container.js'
 
+const VALID_KB_NAME = /^[a-z0-9][a-z0-9_-]*$/
+
 @Controller('kb')
 export class KbController {
   private get config() { return services.config }
 
+  private validateName(name: string): string | null {
+    if (name.startsWith('.')) {
+      return `Error: KB name cannot start with ".".`
+    }
+    if (!VALID_KB_NAME.test(name)) {
+      return `Error: KB name must contain only lowercase letters, numbers, dashes, and underscores (got "${name}").`
+    }
+    return null
+  }
+
   @Cli('create/:name')
   @Description('Create a new knowledge base')
   create(@Param('name') name: string) {
+    const err = this.validateName(name)
+    if (err) return err
+
     const dataDir = this.config.getDataDir()
     const kbDir = path.join(dataDir, name, 'docs')
 
@@ -32,7 +47,7 @@ export class KbController {
 
     const entries = fs.readdirSync(dataDir, { withFileTypes: true })
     const kbs = entries
-      .filter((e) => e.isDirectory() && fs.existsSync(path.join(dataDir, e.name, 'docs')))
+      .filter((e) => e.isDirectory() && !e.name.startsWith('.') && fs.existsSync(path.join(dataDir, e.name, 'docs')))
       .map((e) => e.name)
 
     if (kbs.length === 0) {

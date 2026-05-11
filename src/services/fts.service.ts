@@ -56,7 +56,7 @@ export class FtsService {
 
     try {
       const results = db.prepare(`
-        SELECT id, rank
+        SELECT id, bm25(documents_fts, 0.0, 3.0, 2.0, 1.0) as rank
         FROM documents_fts
         WHERE documents_fts MATCH ?
         ORDER BY rank
@@ -65,7 +65,6 @@ export class FtsService {
 
       return results
     } catch {
-      // FTS5 MATCH can throw on invalid syntax — fall back to empty
       return []
     }
   }

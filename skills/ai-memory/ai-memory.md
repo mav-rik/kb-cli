@@ -124,13 +124,36 @@ Choose the most appropriate category for each document:
 
 ## Best practices
 
+### Document sizing
+- **Target: 50-200 lines per document.** Shorter docs are easier to search, read, and link.
+- **Split large topics** into focused sub-documents rather than one massive file.
+  - Bad: one 500-line "Architecture" doc covering everything
+  - Good: "Auth Architecture", "Data Layer Architecture", "API Design" as separate docs
+- **If a doc grows beyond 300 lines**, consider splitting it. Use links to connect the pieces.
+
+### Naming and IDs
+- Titles become filename slugs: "API Design Decisions" → `api-design-decisions.md`
+- **Use descriptive, specific titles** — not "Notes" or "Stuff" but "React Query Caching Strategy"
+- **KB names**: lowercase letters, numbers, dashes, underscores only (e.g., `work`, `personal`, `project-x`)
+- **Avoid generic titles** that could conflict — prefix with domain if needed
+
+### Cross-referencing
+- **Link related docs aggressively** — links are the primary navigation mechanism.
+- Format: `[Display Text](./other-doc.md)` — always use `./` prefix.
+- When creating a new doc, search for related existing docs and add bidirectional links.
+- After adding a doc about topic X, update existing docs that discuss X to link back.
+
+### Content organization
+- **One concept per document** — atomic knowledge units are more reusable.
+- **Use headings** (## / ###) to structure longer docs — aids reading with `--lines`.
+- **Put the most important info first** — search snippets show the beginning of content.
+
+### General
 1. **Always search before adding** — prevents duplicates and finds related docs to link to.
-2. **Use meaningful titles** — titles become filenames (slugified) and search targets.
-3. **Add cross-links** — use `[Display Text](./other-doc.md)` to connect related knowledge.
-4. **Use tags generously** — tags improve search and filtering.
-5. **Update, don't duplicate** — if info evolves, update the existing doc with `--append` or `--content`.
-6. **Run lint periodically** — keeps the knowledge base healthy.
-7. **Read in chunks** — for large docs, use `--lines` to avoid overwhelming context windows.
+2. **Use tags generously** — tags improve both FTS keyword search and filtering.
+3. **Update, don't duplicate** — if info evolves, update the existing doc with `--append` or `--content`.
+4. **Run lint periodically** — catches broken links, orphaned docs, and index drift.
+5. **Read in chunks** — for large docs, use `--lines` to avoid overwhelming context windows.
 
 ## Document format
 
