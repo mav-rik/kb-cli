@@ -2,16 +2,30 @@
 
 Follow these steps when looking up information from the knowledge base.
 
+## Search modes
+
+| Mode | Flag | When to use |
+|------|------|-------------|
+| **hybrid** (default) | `--mode hybrid` or omit | Best ranking, combines both. Use for most queries. |
+| **fts** | `--mode fts` | Exact terms, function names, identifiers. Instant, no model load. |
+| **vec** | `--mode vec` | Conceptual/semantic queries ("how does X work", "what handles Y"). |
+
+**Rule of thumb**: If the query contains a specific identifier or exact term → use `fts`. If it's a natural language question → use `vec` or `hybrid`.
+
 ## Step 1: Search
 
 **CLI:**
 ```bash
 kb search "<natural language query>"
+kb search "BetterSqlite3Driver" --mode fts     # exact term lookup (fast)
+kb search "how to handle errors" --mode vec    # semantic query
 ```
 
 **API:**
 ```
-GET /api/search?q=<query>&limit=10&kb=<name>
+GET /api/search?q=<query>&limit=10&wiki=<name>
+GET /api/search?q=<query>&mode=fts&wiki=<name>
+GET /api/search?q=<query>&mode=vec&wiki=<name>
 ```
 
 Returns ranked results: ID, title, category, relevance score, and a snippet.

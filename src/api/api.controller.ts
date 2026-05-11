@@ -26,11 +26,12 @@ export class ApiController {
   // ─── Search ───────────────────────────────────────────────────────────────
 
   @Get('search')
-  async search(@Query('q') q: string, @Query('limit') limit: string, @Query('wiki') wiki: string) {
+  async search(@Query('q') q: string, @Query('limit') limit: string, @Query('mode') mode: string, @Query('wiki') wiki: string) {
     const resolvedWiki = this.config.resolveWiki(wiki)
     const parsedLimit = limit ? parseInt(limit, 10) : 10
     if (!q) return { error: 'Query parameter "q" is required' }
-    return this.searchService.search(resolvedWiki, q, parsedLimit)
+    const searchMode = (mode === 'fts' || mode === 'vec') ? mode : 'hybrid' as const
+    return this.searchService.search(resolvedWiki, q, parsedLimit, searchMode)
   }
 
   // ─── Read ─────────────────────────────────────────────────────────────────

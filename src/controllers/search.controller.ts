@@ -1,6 +1,6 @@
 import { Controller, Cli, Param, CliOption, Description, Optional } from '@moostjs/event-cli'
 import { services } from '../services/container.js'
-import { SearchResult } from '../services/search.service.js'
+import { SearchResult, SearchMode } from '../services/search.service.js'
 import { toDocId, toFilename } from '../utils/slug.js'
 
 @Controller()
@@ -15,13 +15,15 @@ export class SearchController {
   async search(
     @Param('query') query: string,
     @Description('Max results') @CliOption('limit', 'n') @Optional() limit: string,
+    @Description('Search mode: hybrid, fts, vec') @CliOption('mode', 'm') @Optional() mode: string,
     @Description('Output format') @CliOption('format') @Optional() format: string,
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string | object> {
     const parsedLimit = limit ? parseInt(limit, 10) : 10
     const resolvedKb = this.config.resolveWiki(wiki)
+    const searchMode = (mode === 'fts' || mode === 'vec') ? mode : 'hybrid' as SearchMode
 
-    const results = await this.searchService.search(resolvedKb, query, parsedLimit)
+    const results = await this.searchService.search(resolvedKb, query, parsedLimit, searchMode)
 
     if (results.length === 0) {
       return 'No results found.'

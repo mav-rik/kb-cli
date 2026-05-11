@@ -15,6 +15,8 @@ You have access to a persistent wiki via the `kb` CLI or HTTP API. Use it to sto
 
 ```bash
 kb search "<query>"              # find knowledge (hybrid semantic + keyword)
+kb search "<query>" --mode fts   # keyword only (fast, no model load)
+kb search "<query>" --mode vec   # semantic only
 kb read <filename>               # read a document (raw markdown)
 kb read <filename> --lines 1-80  # read in chunks
 kb read <filename> --links       # see outgoing links
@@ -38,7 +40,7 @@ kb wiki use <name>               # set default wiki
 ### HTTP API (when server is running via `kb serve`)
 
 ```
-GET  /api/search?q=<query>&limit=10&wiki=<name>
+GET  /api/search?q=<query>&limit=10&wiki=<name>&mode=hybrid|fts|vec
 GET  /api/read/<filename>?wiki=<name>&lines=<range>&format=json
 POST /api/docs                        body: { title, category, tags[], content, wiki? }
 PUT  /api/docs/<id>                   body: { title?, category?, tags?, content?, append?, wiki? }
