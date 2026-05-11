@@ -13,6 +13,10 @@ https://www.reddit.com/r/ObsidianMD/comments/1l9rdnb/basic_memory_obsidian_ai_th
 
 https://github.com/jrcruciani/obsidian-memory-for-ai
 
+https://dev.to/oracledevs/agent-memory-why-your-ai-has-amnesia-and-how-to-fix-it-475e?customTrackingParam=:ad:vd:yt:awr:a_nas::RC_DEVT260304P00029:Omer
+
+Obsidian CLI is interesting to research as well, we may use it as well.
+
 
 What operations I want it to support:
 
@@ -54,8 +58,9 @@ repeat for all the steps.
 
 phase 5 - extensive testing
 
-phase 6 - skill
+phase 6 - skill/agents
 create skill for using the built CLI using "skill-creator" skill in ./skills dir of this repo.
+agents may be benefitial to define for this system as well, maybe some cheaper model agents can handle some errunds for us. Woth researching.
 
 
 Stack and tech:
