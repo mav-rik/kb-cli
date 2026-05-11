@@ -33,7 +33,30 @@ export class KbController {
     if (kbs.length === 0) {
       return 'No knowledge bases found.'
     }
-    return kbs.join('\n')
+
+    const dataDir = this.config.getDataDir()
+    const lines = ['Name         | Docs | DB Size  | Docs Size', '-------------|------|----------|----------']
+
+    for (const name of kbs) {
+      const docsDir = path.join(dataDir, name, 'docs')
+      const dbPath = path.join(dataDir, name, 'index.db')
+
+      let docCount = 0
+      let docsSize = 0
+      if (fs.existsSync(docsDir)) {
+        const files = fs.readdirSync(docsDir).filter(f => f.endsWith('.md'))
+        docCount = files.length
+        for (const f of files) {
+          docsSize += fs.statSync(path.join(docsDir, f)).size
+        }
+      }
+
+      const dbSize = fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0
+
+      lines.push(`${name.padEnd(12)} | ${String(docCount).padStart(4)} | ${formatBytes(dbSize).padStart(8)} | ${formatBytes(docsSize)}`)
+    }
+
+    return lines.join('\n')
   }
 
   @Cli('delete/:name')
