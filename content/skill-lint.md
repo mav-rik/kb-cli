@@ -109,7 +109,14 @@ Review the KB holistically. Look for:
 - Areas where the KB has depth in one aspect but not related ones (e.g., detailed on "how" but missing "why")
 - Questions the user might ask that the KB can't answer well
 
-Suggest to the user: "The KB could benefit from information about X, Y, Z." This helps guide future ingestion.
+**Suggest sources to fill gaps.** For each gap identified:
+- What specific information is missing?
+- What kind of source would fill it? (article, documentation, conversation with someone, experiment)
+- If applicable, suggest a web search query that would find relevant material
+
+Report to user: "The KB has gaps in X, Y, Z. Suggested sources to investigate: ..."
+
+This turns lint from a passive health check into an active growth driver for the KB.
 
 ### Step 7: Update schema
 
