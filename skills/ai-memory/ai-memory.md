@@ -125,13 +125,21 @@ aimem toc             # regenerate table of contents
 
 ## Categories
 
-Choose the most appropriate category for each document:
-- `concepts` — definitions, explanations, how things work
-- `projects` — ongoing work, goals, plans
-- `people` — people, teams, contacts
-- `decisions` — architectural decisions, trade-offs, rationale
-- `references` — links, resources, documentation pointers
-- `misc` — anything that doesn't fit above
+Categories are **free-form strings** — create whatever makes sense for the knowledge base's domain. There is no fixed list. Use `aimem list --category <cat>` to browse by category.
+
+**Choosing categories**: Look at what's already in the KB first (`aimem list`) and reuse existing categories for consistency. If nothing fits, create a new one.
+
+**Naming convention**: short, lowercase, singular nouns. Examples by domain:
+
+| Domain | Example categories |
+|--------|-------------------|
+| Software dev | `architecture`, `api`, `debugging`, `tooling`, `deployment` |
+| Personal | `health`, `finance`, `travel`, `recipes`, `contacts` |
+| Work | `meetings`, `projects`, `policies`, `onboarding`, `clients` |
+| Research | `papers`, `methods`, `datasets`, `findings`, `hypotheses` |
+| Mixed | `notes`, `plans`, `ideas`, `logs`, `references` |
+
+The agent should **discover existing categories** before inventing new ones — run `aimem list` to see what's already in use.
 
 ## Best practices
 
