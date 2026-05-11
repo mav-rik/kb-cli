@@ -39,12 +39,14 @@ const AGENTS: AgentConfig[] = [
 
       const cmdDir = path.join(cwd, '.claude', 'commands')
       fs.mkdirSync(cmdDir, { recursive: true })
-      fs.copyFileSync(path.join(setupDir, 'claude-cmd-ingest.md'), path.join(cmdDir, 'kb-ingest.md'))
-      fs.copyFileSync(path.join(setupDir, 'claude-cmd-search.md'), path.join(cmdDir, 'kb-search.md'))
-      fs.copyFileSync(path.join(setupDir, 'claude-cmd-lint.md'), path.join(cmdDir, 'kb-lint.md'))
-      msgs.push(`  .claude/commands/kb-ingest.md`)
-      msgs.push(`  .claude/commands/kb-search.md`)
-      msgs.push(`  .claude/commands/kb-lint.md`)
+      fs.copyFileSync(path.join(setupDir, 'claude-cmd-ingest.md'), path.join(cmdDir, 'kb:ingest.md'))
+      fs.copyFileSync(path.join(setupDir, 'claude-cmd-search.md'), path.join(cmdDir, 'kb:search.md'))
+      fs.copyFileSync(path.join(setupDir, 'claude-cmd-lint.md'), path.join(cmdDir, 'kb:lint.md'))
+      fs.copyFileSync(path.join(setupDir, 'claude-cmd-create-wiki.md'), path.join(cmdDir, 'kb:create-wiki.md'))
+      msgs.push(`  .claude/commands/kb:ingest.md`)
+      msgs.push(`  .claude/commands/kb:search.md`)
+      msgs.push(`  .claude/commands/kb:lint.md`)
+      msgs.push(`  .claude/commands/kb:create-wiki.md`)
       return msgs
     },
   },
