@@ -174,6 +174,7 @@ export class ApiController {
   }
 
   @Get('docs')
+  @Get('list')
   async listDocs(@Query('wiki') wiki: string, @Query('category') category: string, @Query('tag') tag: string) {
     const wikiName = this.config.resolveWiki(wiki)
     return this.index.listDocs(wikiName, { category, tag })
