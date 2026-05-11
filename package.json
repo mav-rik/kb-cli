@@ -1,13 +1,50 @@
 {
-  "name": "claude-mem",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "ai-memory",
+  "version": "0.1.0",
+  "description": "AI memory management CLI",
+  "type": "module",
+  "main": "dist/main.js",
+  "bin": {
+    "aimem": "./bin.js"
+  },
+  "files": [
+    "dist",
+    "bin.js"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "rolldown build -c rolldown.config.ts",
+    "dev": "pnpm build && node ./dist/main.js",
+    "clean": "rm -rf dist"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "packageManager": "pnpm@10.18.3"
+  "packageManager": "pnpm@10.18.3",
+  "dependencies": {
+    "@atscript/core": "^0.1.52",
+    "@atscript/db": "^0.1.70",
+    "@atscript/db-sqlite": "^0.1.70",
+    "@atscript/typescript": "^0.1.52",
+    "@huggingface/transformers": "^4.2.0",
+    "@moostjs/event-cli": "^0.6.9",
+    "better-sqlite3": "^12.9.0",
+    "gray-matter": "^4.0.3",
+    "sqlite-vec": "^0.1.9"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "onnxruntime-node"
+    ]
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.6.2",
+    "rolldown": "1.0.0",
+    "typescript": "^6.0.3",
+    "unplugin-atscript": "^0.1.52"
+  }
 }
