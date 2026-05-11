@@ -14,36 +14,74 @@ Before starting, assess the input:
 
 ### Step 1: Search for existing knowledge
 
+**CLI:**
 ```bash
 aimem search "<key concepts from the new information>"
+```
+
+**API:**
+```
+GET /api/search?q=<key concepts>&limit=10&kb=<name>
 ```
 
 If a highly relevant doc exists (score > 0.03), go to Step 2a. Otherwise Step 2b.
 
 ### Step 2a: Update existing document
 
+**CLI:**
 ```bash
 aimem read <filename>
 ```
 
+**API:**
+```
+GET /api/read/<filename>?kb=<name>
+```
+
 Review the existing content. Then either:
+
+**CLI:**
 - Append new info: `aimem update <id> --append "\n\n## New Section\n\ncontent..."`
 - Replace with merged content: `aimem update <id> --content "full merged content"`
+
+**API:**
+```
+PUT /api/docs/<id>
+body: { "append": "\n\n## New Section\n\ncontent..." }
+PUT /api/docs/<id>
+body: { "content": "full merged content" }
+```
 
 ### Step 2b: Create new document
 
 Check existing categories and schema:
+
+**CLI:**
 ```bash
 aimem categories
 aimem schema
 ```
 
+**API:**
+```
+GET /api/categories?kb=<name>
+GET /api/schema?kb=<name>
+```
+
 Create the document:
+
+**CLI:**
 ```bash
 aimem add --title "Descriptive Title" --category <category> --tags "tag1,tag2" --content "content with [links](./related-doc.md)"
 ```
 
-For large content, use `--file <path>` or pipe via `--stdin`.
+**API:**
+```
+POST /api/docs
+body: { "title": "Descriptive Title", "category": "<category>", "tags": ["tag1","tag2"], "content": "content with [links](./related-doc.md)" }
+```
+
+For large content, use `--file <path>` or pipe via `--stdin` (CLI only).
 
 ---
 
@@ -70,6 +108,7 @@ For each identified element, decide:
 
 For each page to create or update:
 
+**CLI:**
 ```bash
 # Check if it exists
 aimem search "<entity/concept name>"
@@ -82,25 +121,58 @@ aimem update <id> --append "\n\n## From [Source Title]\n\nnew information..."
 aimem add --title "Entity Name" --category <category> --tags "..." --content "..."
 ```
 
+**API:**
+```
+GET /api/search?q=<entity/concept name>&limit=10&kb=<name>
+
+GET /api/read/<filename>?kb=<name>
+PUT /api/docs/<id>
+body: { "append": "\n\n## From [Source Title]\n\nnew information..." }
+
+POST /api/docs
+body: { "title": "Entity Name", "category": "<category>", "tags": ["..."], "content": "..." }
+```
+
 ### Step 4D: Create a summary page (optional)
 
 For substantial sources, create a summary page that links to all the pages it touched:
 
+**CLI:**
 ```bash
 aimem add --title "Summary: Source Title" --category summaries --tags "summary,source-name" --content "## Key takeaways\n\n- Point 1 (see [Entity](./entity.md))\n- Point 2 (see [Concept](./concept.md))\n..."
+```
+
+**API:**
+```
+POST /api/docs
+body: { "title": "Summary: Source Title", "category": "summaries", "tags": ["summary","source-name"], "content": "## Key takeaways\n\n..." }
 ```
 
 ### Step 5D: Cross-link everything
 
 Every page created or updated should link to related pages. Use `aimem related <id>` to find candidates:
 
+**CLI:**
 ```bash
 aimem related <new-doc-id>
 ```
 
+**API:**
+```
+GET /api/docs/<new-doc-id>/related?kb=<name>&limit=10
+```
+
 Update related docs to link back:
+
+**CLI:**
 ```bash
 aimem update <related-id> --append "\n\nSee also: [New Topic](./new-topic.md)"
+```
+
+**API:**
+```
+PUT /api/docs/<related-id>
+body: { "append": "\n\nSee also: [New Topic](./new-topic.md)" }
 ```
 
 ---
@@ -110,22 +182,41 @@ aimem update <related-id> --append "\n\nSee also: [New Topic](./new-topic.md)"
 ### Sync related knowledge
 
 Search for docs that might now contain outdated or contradictory information:
+
+**CLI:**
 ```bash
 aimem search "<key facts from new content>"
+```
+
+**API:**
+```
+GET /api/search?q=<key facts>&limit=10&kb=<name>
 ```
 
 Read each result. If any contain stale info, update them.
 
 ### Update schema
 
+**CLI:**
 ```bash
 aimem schema update
 ```
 
+**API:**
+```
+POST /api/schema?kb=<name>
+```
+
 ### Verify
 
+**CLI:**
 ```bash
 aimem lint
+```
+
+**API:**
+```
+GET /api/lint?kb=<name>
 ```
 
 Should report no broken links or drift.
