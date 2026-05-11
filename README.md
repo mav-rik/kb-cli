@@ -155,4 +155,4 @@ GET  /api/schema?wiki=...
 
 ## License
 
-ISC
+MIT — Artem Maltsev

@@ -20,9 +20,9 @@
     "dev": "pnpm build && node ./dist/main.js",
     "clean": "rm -rf dist"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["wiki", "knowledge-base", "ai", "llm", "memory", "cli", "semantic-search", "markdown"],
+  "author": "Artem Maltsev <artem@maltsev.nl>",
+  "license": "MIT",
   "packageManager": "pnpm@10.18.3",
   "dependencies": {
     "@atscript/core": "^0.1.52",
