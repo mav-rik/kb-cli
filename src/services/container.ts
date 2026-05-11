@@ -5,6 +5,7 @@ import { IndexService } from './index.service.js'
 import { LinkerService } from './linker.service.js'
 import { EmbeddingService } from './embedding.service.js'
 import { VectorService } from './vector.service.js'
+import { FtsService } from './fts.service.js'
 import { SearchService } from './search.service.js'
 
 class ServiceContainer {
@@ -15,14 +16,16 @@ class ServiceContainer {
   readonly linker: LinkerService
   readonly embedding = new EmbeddingService()
   readonly vector: VectorService
+  readonly fts: FtsService
   readonly search: SearchService
 
   constructor() {
     this.index = new IndexService(this.config)
     this.vector = new VectorService(this.config)
+    this.fts = new FtsService(this.config)
     this.storage = new StorageService(this.config, this.parser)
     this.linker = new LinkerService(this.storage, this.parser, this.index)
-    this.search = new SearchService(this.embedding, this.vector, this.index, this.storage)
+    this.search = new SearchService(this.embedding, this.vector, this.fts, this.index, this.storage)
   }
 }
 

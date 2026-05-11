@@ -48,7 +48,6 @@ export class IndexService {
       title: string
       category: string
       tags?: string[]
-      content: string
       filePath: string
       contentHash: string
     },
@@ -84,7 +83,6 @@ export class IndexService {
     const filter: Record<string, unknown> = {}
     if (filters?.category) filter.category = filters.category
     let results = await space.getTable(Document).findMany({ filter })
-    // Tag filtering on JSON arrays — done in application code (SQLite limitation)
     if (filters?.tag) {
       results = results.filter(
         (doc) => doc.tags && doc.tags.includes(filters.tag!),
@@ -127,28 +125,6 @@ export class IndexService {
     for (const chunk of chunks) {
       await table.insertOne({ ...chunk, docId })
     }
-  }
-
-  async searchFts(
-    kb: string,
-    query: string,
-    limit: number = 10,
-  ): Promise<{ id: string; rank: number }[]> {
-    const space = await this.getSpace(kb)
-    const table = space.getTable(Document)
-    const results = await table.search(query, { filter: {} }, 'search')
-    return results.slice(0, limit).map((r) => ({ id: r.id, rank: 0 }))
-  }
-
-  async searchChunks(
-    kb: string,
-    query: string,
-    limit: number = 10,
-  ): Promise<{ id: string; docId: string; rank: number }[]> {
-    const space = await this.getSpace(kb)
-    const table = space.getTable(Chunk)
-    const results = await table.search(query, { filter: {} }, 'chunk_search')
-    return results.slice(0, limit).map((r) => ({ id: r.id, docId: r.docId, rank: 0 }))
   }
 
   async dropAll(kb: string): Promise<void> {

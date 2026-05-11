@@ -21,6 +21,7 @@ export class LintController {
   private get linker() { return services.linker }
   private get embedding() { return services.embedding }
   private get vector() { return services.vector }
+  private get fts() { return services.fts }
 
   @Cli('lint')
   @Description('Check knowledge base integrity')
@@ -156,6 +157,7 @@ export class LintController {
 
     this.vector.ensureTables(kbName)
     this.vector.dropAll(kbName)
+    this.fts.dropAll(kbName)
 
     const files = this.storage.listFiles(kbName)
     const total = files.length
@@ -177,7 +179,6 @@ export class LintController {
         title: doc.frontmatter.title,
         category: doc.frontmatter.category,
         tags: doc.frontmatter.tags,
-        content: doc.body,
         filePath: file,
         contentHash: hash,
       })
@@ -189,6 +190,8 @@ export class LintController {
           doc.links.map((l) => ({ toId: toDocId(l.target), linkText: l.text })),
         )
       }
+
+      this.fts.upsert(kbName, docId, doc.frontmatter.title, doc.frontmatter.tags || [], doc.body || '')
 
       const embedding = await this.embedding.embed(doc.body || doc.frontmatter.title)
       this.vector.upsertVec(kbName, docId, embedding)

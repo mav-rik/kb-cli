@@ -4,16 +4,12 @@ export interface Document {
     @meta.id
     id: string
 
-    @db.index.fulltext 'search', 3
     title: string
 
     category: string
 
     @db.json
     tags?: string[]
-
-    @db.index.fulltext 'search', 1
-    content: string
 
     @db.column 'file_path'
     filePath: string

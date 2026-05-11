@@ -14,6 +14,7 @@ export class DocController {
   private get linker() { return services.linker }
   private get embedding() { return services.embedding }
   private get vector() { return services.vector }
+  private get fts() { return services.fts }
 
   private async indexAndEmbed(kb: string, docId: string, frontmatter: DocFrontmatter, body: string, filename: string): Promise<void> {
     const links = this.parser.extractLinks(body)
@@ -23,7 +24,6 @@ export class DocController {
       title: frontmatter.title,
       category: frontmatter.category,
       tags: frontmatter.tags,
-      content: body,
       filePath: filename,
       contentHash: contentHash(body),
     })
@@ -33,6 +33,8 @@ export class DocController {
       docId,
       links.map((l) => ({ toId: toDocId(l.target), linkText: l.text })),
     )
+
+    this.fts.upsert(kb, docId, frontmatter.title, frontmatter.tags || [], body)
 
     this.vector.ensureTables(kb)
     const vec = await this.embedding.embed(body)
@@ -179,6 +181,7 @@ export class DocController {
     await this.index.deleteDoc(kbName, docId)
     this.vector.ensureTables(kbName)
     this.vector.deleteVec(kbName, docId)
+    this.fts.delete(kbName, docId)
 
     const output = [`Deleted: ${filename}`]
     output.push(...warnings)
@@ -219,6 +222,7 @@ export class DocController {
     const modifiedCount = await this.linker.updateLinksAcrossKb(kbName, oldFilename, newFilename)
 
     await this.index.deleteDoc(kbName, oldId)
+    this.fts.delete(kbName, oldId)
     await this.indexAndEmbed(kbName, newId, frontmatter, doc.body, newFilename)
 
     // Update index for docs whose links now point to newId
