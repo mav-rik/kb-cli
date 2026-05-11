@@ -102,7 +102,16 @@ aimem log --limit 50
 
 Look for docs that haven't been updated in a long time but cover evolving topics. Read them and check if the information is still current.
 
-### Step 6: Update schema
+### Step 6: Identify knowledge gaps
+
+Review the KB holistically. Look for:
+- Topics that are referenced but thin (mentioned in many docs, but the dedicated page is shallow)
+- Areas where the KB has depth in one aspect but not related ones (e.g., detailed on "how" but missing "why")
+- Questions the user might ask that the KB can't answer well
+
+Suggest to the user: "The KB could benefit from information about X, Y, Z." This helps guide future ingestion.
+
+### Step 7: Update schema
 
 After any semantic review session:
 ```bash
