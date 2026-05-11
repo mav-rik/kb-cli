@@ -24,6 +24,8 @@ What operations I want it to support:
 
 - search for information: I want to be able to request something, and agent must be able to retrieve data from the memory using reasonable small amount of tokens.
 
+- knowledge base ID (name) - user can create not intersected knowledge bases. E.g. work vs personal. All within same user directory. So every time user interacts with the memory they must provide the knowledge base id (name). I think we must also provide a "DEFAULT" one, which is used when no knowledge base name provided. So we basically looking into an option for user to split their knowledge somehow if they need so.
+
 The CLI may have some helper methods:
 - scan all the MDs and verify there is no stale links, or orphaned docs, provide the report
 - use index.md or sqlite for indexing
