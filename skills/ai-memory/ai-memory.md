@@ -32,6 +32,16 @@ You have access to a persistent knowledge base via the `aimem` CLI. Use it to st
    aimem add --title "Topic Name" --category <category> --tags "tag1,tag2" --content "..."
    ```
 4. **Link related docs** — include `[Related Topic](./related-topic.md)` links in the content body.
+5. **Sync related knowledge** (MANDATORY after every add/update):
+   ```bash
+   aimem search "<key concepts from the new/changed content>"
+   ```
+   Read each related doc. If any contain outdated, contradictory, or superseded information:
+   - Update them with corrected info via `aimem update <id> --content "..."`
+   - Or append a correction: `aimem update <id> --append "\n\n> Updated: ..."`
+   - Remove stale cross-links if the relationship no longer applies
+   
+   This step ensures the KB stays internally consistent. Never leave contradictions.
 
 ### Retrieving knowledge
 
@@ -99,6 +109,7 @@ aimem read <filename> --follow <link>    # resolve and read linked doc
 ### Search
 ```bash
 aimem search "<query>" [--limit N] [--format json]
+aimem related <id> [--limit N] [--format json]   # find docs semantically similar to a given doc
 ```
 
 ### Maintenance
