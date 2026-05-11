@@ -1,5 +1,6 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import * as crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { Controller, Cli, CliOption, Description, Optional } from '@moostjs/event-cli'
 
@@ -33,8 +34,21 @@ const AGENTS: AgentConfig[] = [
       const msgs: string[] = []
       const skillDir = path.join(cwd, '.claude', 'skills', 'kb')
       fs.mkdirSync(skillDir, { recursive: true })
-      fs.copyFileSync(path.join(setupDir, 'claude-skill.md'), path.join(skillDir, 'kb.md'))
-      msgs.push(`  .claude/skills/kb/kb.md`)
+      fs.copyFileSync(path.join(setupDir, 'claude-skill.md'), path.join(skillDir, 'SKILL.md'))
+      msgs.push(`  .claude/skills/kb/SKILL.md`)
+
+      // Register in skills-lock.json
+      const lockPath = path.join(cwd, 'skills-lock.json')
+      const lock = fs.existsSync(lockPath) ? JSON.parse(fs.readFileSync(lockPath, 'utf-8')) : { version: 1, skills: {} }
+      const skillContent = fs.readFileSync(path.join(skillDir, 'SKILL.md'), 'utf-8')
+      lock.skills['kb'] = {
+        source: 'local',
+        sourceType: 'local',
+        skillPath: 'skills/kb/SKILL.md',
+        computedHash: crypto.createHash('sha256').update(skillContent).digest('hex'),
+      }
+      fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\n')
+      msgs.push(`  skills-lock.json (registered kb skill)`)
 
       const cmdDir = path.join(cwd, '.claude', 'commands')
       fs.mkdirSync(cmdDir, { recursive: true })
