@@ -153,9 +153,8 @@ export class SetupController {
 
     const configPath = path.join(cwd, 'kb.config.json')
     if (!fs.existsSync(configPath)) {
-      const defaultWiki = this.config.get('defaultWiki')
-      fs.writeFileSync(configPath, JSON.stringify({ wiki: defaultWiki }, null, 2) + '\n')
-      output.push(`Created kb.config.json (wiki: "${defaultWiki}")`)
+      fs.writeFileSync(configPath, '{}\n')
+      output.push(`Created kb.config.json (empty — set wiki with \`kb wiki use <name>\` or edit manually)`)
     }
 
     output.push('Done! Agents can now use `kb` commands.')
