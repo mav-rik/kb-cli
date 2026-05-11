@@ -66,15 +66,19 @@ export class VectorService {
    * Returns array of { id, distance } sorted by distance (ascending = most similar).
    */
   searchVec(kb: string, queryEmbedding: Float32Array, limit: number): { id: string; distance: number }[] {
+    this.ensureTables(kb)
     const db = this.getDb(kb)
-    const results = db.prepare(`
-      SELECT id, distance
-      FROM documents_vec
-      WHERE embedding MATCH ?
-      ORDER BY distance
-      LIMIT ?
-    `).all(Buffer.from(queryEmbedding.buffer), limit) as { id: string; distance: number }[]
-    return results
+    try {
+      return db.prepare(`
+        SELECT id, distance
+        FROM documents_vec
+        WHERE embedding MATCH ?
+        ORDER BY distance
+        LIMIT ?
+      `).all(Buffer.from(queryEmbedding.buffer), limit) as { id: string; distance: number }[]
+    } catch {
+      return []
+    }
   }
 
   /**
