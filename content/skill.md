@@ -39,15 +39,19 @@ kb wiki use <name>               # set default wiki
 
 ### HTTP API (when server is running via `kb serve`)
 
+Base URL: `http://localhost:4141` (default port). `GET /api` lists all endpoints.
+
 ```
+GET  /api/health                      → { status: "ok" }
 GET  /api/search?q=<query>&limit=10&wiki=<name>&mode=hybrid|fts|vec
-GET  /api/read/<filename>?wiki=<name>&lines=<range>&format=json
-POST /api/docs                        body: { title, category, tags[], content, wiki? }
-PUT  /api/docs/<id>                   body: { title?, category?, tags?, content?, append?, wiki? }
+GET  /api/read/<id>?wiki=<name>&lines=<range>&format=json
+POST /api/docs                        body: { title, category, tags[], body, wiki? }
+PUT  /api/docs/<id>                   body: { title?, category?, tags?, body?, append?, wiki? }
 DELETE /api/docs/<id>?wiki=<name>
 GET  /api/docs?wiki=<name>&category=<c>&tag=<t>
+GET  /api/list?wiki=<name>            (alias for /api/docs)
 GET  /api/docs/<id>/related?wiki=<name>&limit=10
-POST /api/docs/<id>/rename            body: { newId, wiki? }
+POST /api/docs/<id>/rename            body: { to: "<new-id>", wiki? }
 GET  /api/categories?wiki=<name>
 GET  /api/lint?wiki=<name>
 POST /api/lint/fix?wiki=<name>
@@ -62,6 +66,8 @@ PUT  /api/wiki/use/<name>
 DELETE /api/wiki/<name>
 GET  /api/skill?workflow=<name>
 ```
+
+Note: content fields accept `body`, `text`, or `content` as field name (all equivalent).
 
 ## Key principles
 

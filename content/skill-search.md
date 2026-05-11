@@ -41,9 +41,9 @@ kb read <filename> --lines 81-160
 
 **API:**
 ```
-GET /api/read/<filename>?kb=<name>
-GET /api/read/<filename>?kb=<name>&lines=1-80
-GET /api/read/<filename>?kb=<name>&format=json    # structured response
+GET /api/read/<filename>?wiki=<name>
+GET /api/read/<filename>?wiki=<name>&lines=1-80
+GET /api/read/<filename>?wiki=<name>&format=json    # structured response
 ```
 
 ## Step 3: Explore related knowledge
@@ -57,8 +57,8 @@ kb related <id>                     # semantically similar docs
 
 **API:**
 ```
-GET /api/read/<filename>?kb=<name>&format=json    # includes links array
-GET /api/docs/<id>/related?kb=<name>&limit=10
+GET /api/read/<filename>?wiki=<name>&format=json    # includes links array
+GET /api/docs/<id>/related?wiki=<name>&limit=10
 ```
 
 ## Step 4: Browse by category
@@ -71,8 +71,8 @@ kb list --category <category>
 
 **API:**
 ```
-GET /api/categories?kb=<name>
-GET /api/docs?kb=<name>&category=<category>
+GET /api/categories?wiki=<name>
+GET /api/docs?wiki=<name>&category=<category>
 ```
 
 ## Step 5: Persist valuable answers

@@ -48,8 +48,8 @@ kb search "<key changed facts>"
 
 **API:**
 ```
-GET /api/docs/<id>/related?kb=<name>&limit=10
-GET /api/search?q=<key changed facts>&limit=10&kb=<name>
+GET /api/docs/<id>/related?wiki=<name>&limit=10
+GET /api/search?q=<key changed facts>&limit=10&wiki=<name>
 ```
 
 Read each related doc. Fix any contradictions:
@@ -92,7 +92,7 @@ kb delete <id>
 
 **API:**
 ```
-DELETE /api/docs/<id>?kb=<name>
+DELETE /api/docs/<id>?wiki=<name>
 ```
 
 If other docs linked to it, they'll be warned about broken links. Fix them:
@@ -104,7 +104,7 @@ kb lint --fix
 
 **API:**
 ```
-POST /api/lint/fix?kb=<name>
+POST /api/lint/fix?wiki=<name>
 ```
 
 ## Reorganizing

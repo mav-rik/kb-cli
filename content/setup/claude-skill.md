@@ -1,23 +1,35 @@
 ---
 name: kb
-description: Manage persistent wiki via the kb CLI. Use when storing, retrieving, updating, or searching knowledge that should persist across conversations. Triggers on remember, store, recall, look up, find in memory, organize knowledge.
+description: Manage persistent wiki via the kb CLI or HTTP API. Use when storing, retrieving, updating, or searching knowledge that should persist across conversations. Triggers on remember, store, recall, look up, find in memory, organize knowledge.
 ---
 
 # kb
 
-Run `kb skill` to see full instructions. Run workflow-specific guides:
-- `kb skill ingest` — how to store new knowledge
-- `kb skill search` — how to find and retrieve knowledge
-- `kb skill update` — how to modify/reorganize knowledge
-- `kb skill lint` — how to maintain wiki health
+Persistent wiki for AI agents. Two interfaces: CLI and HTTP API.
+
+**CLI** (run directly):
+```bash
+kb skill                # full instructions
+kb skill ingest         # how to store knowledge
+kb skill search         # how to retrieve knowledge
+kb skill update         # how to modify knowledge
+kb skill lint           # how to maintain wiki health
+```
+
+**HTTP API** (when `kb serve` is running on port 4141):
+```
+GET http://localhost:4141/api          # list all endpoints
+GET http://localhost:4141/api/skill    # full instructions via API
+```
 
 Quick reference:
 ```bash
 kb search "<query>"              # find knowledge
+kb search "<query>" --mode fts   # exact keyword match (fast, no model load)
 kb read <filename>               # read document
-kb add --title "..." --category <cat> --tags "..." --content "..."
+kb add --title "..." --category <cat> --tags "..." --body "..."
 kb update <id> --append "..."    # add to existing
-kb lint                          # check health
+kb lint --fix                    # check and fix health
 ```
 
 Key rules:

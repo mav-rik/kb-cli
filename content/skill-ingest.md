@@ -21,7 +21,7 @@ kb search "<key concepts from the new information>"
 
 **API:**
 ```
-GET /api/search?q=<key concepts>&limit=10&kb=<name>
+GET /api/search?q=<key concepts>&limit=10&wiki=<name>
 ```
 
 If a highly relevant doc exists (score > 0.03), go to Step 2a. Otherwise Step 2b.
@@ -35,7 +35,7 @@ kb read <filename>
 
 **API:**
 ```
-GET /api/read/<filename>?kb=<name>
+GET /api/read/<filename>?wiki=<name>
 ```
 
 Review the existing content. Then either:
@@ -64,8 +64,8 @@ kb schema
 
 **API:**
 ```
-GET /api/categories?kb=<name>
-GET /api/schema?kb=<name>
+GET /api/categories?wiki=<name>
+GET /api/schema?wiki=<name>
 ```
 
 Create the document:
@@ -123,9 +123,9 @@ kb add --title "Entity Name" --category <category> --tags "..." --content "..."
 
 **API:**
 ```
-GET /api/search?q=<entity/concept name>&limit=10&kb=<name>
+GET /api/search?q=<entity/concept name>&limit=10&wiki=<name>
 
-GET /api/read/<filename>?kb=<name>
+GET /api/read/<filename>?wiki=<name>
 PUT /api/docs/<id>
 body: { "append": "\n\n## From [Source Title]\n\nnew information..." }
 
@@ -159,7 +159,7 @@ kb related <new-doc-id>
 
 **API:**
 ```
-GET /api/docs/<new-doc-id>/related?kb=<name>&limit=10
+GET /api/docs/<new-doc-id>/related?wiki=<name>&limit=10
 ```
 
 Update related docs to link back:
@@ -190,7 +190,7 @@ kb search "<key facts from new content>"
 
 **API:**
 ```
-GET /api/search?q=<key facts>&limit=10&kb=<name>
+GET /api/search?q=<key facts>&limit=10&wiki=<name>
 ```
 
 Read each result. If any contain stale info, update them.
@@ -204,7 +204,7 @@ kb schema update
 
 **API:**
 ```
-POST /api/schema?kb=<name>
+POST /api/schema?wiki=<name>
 ```
 
 ### Verify
@@ -216,7 +216,7 @@ kb lint --fix
 
 **API:**
 ```
-POST /api/lint/fix?kb=<name>
+POST /api/lint/fix?wiki=<name>
 ```
 
 Should report no broken links or drift.
