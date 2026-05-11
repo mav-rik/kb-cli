@@ -27,7 +27,7 @@ export class ApiController {
   // ─── Read ─────────────────────────────────────────────────────────────────
 
   @Get('read/:filename')
-  async read(@Param('filename') filename: string, @Query('kb') kb: string, @Query('lines') lines: string) {
+  async read(@Param('filename') filename: string, @Query('kb') kb: string, @Query('lines') lines: string, @Query('format') format: string) {
     const resolvedKb = this.config.resolveKb(kb)
     const targetPath = toFilename(filename)
 
@@ -35,22 +35,29 @@ export class ApiController {
       return { error: `Document "${targetPath}" not found in KB "${resolvedKb}".` }
     }
 
-    const doc = this.storage.readDoc(resolvedKb, targetPath)
+    if (format === 'json') {
+      const doc = this.storage.readDoc(resolvedKb, targetPath)
+      let bodyContent = doc.body
+      if (lines) {
+        const bodyLines = doc.body.split('\n')
+        const parts = lines.split('-')
+        const start = Math.max(1, parseInt(parts[0], 10) || 1)
+        const end = Math.min(bodyLines.length, parseInt(parts[1], 10) || bodyLines.length)
+        bodyContent = bodyLines.slice(start - 1, end).join('\n')
+      }
+      return { meta: doc.frontmatter, content: bodyContent, links: doc.links }
+    }
 
-    let bodyContent = doc.body
+    // Default: return raw markdown
+    const raw = this.storage.readRaw(resolvedKb, targetPath)
     if (lines) {
-      const bodyLines = doc.body.split('\n')
+      const allLines = raw.split('\n')
       const parts = lines.split('-')
       const start = Math.max(1, parseInt(parts[0], 10) || 1)
-      const end = Math.min(bodyLines.length, parseInt(parts[1], 10) || bodyLines.length)
-      bodyContent = bodyLines.slice(start - 1, end).join('\n')
+      const end = Math.min(allLines.length, parseInt(parts[1], 10) || allLines.length)
+      return allLines.slice(start - 1, end).join('\n')
     }
-
-    return {
-      meta: doc.frontmatter,
-      content: bodyContent,
-      links: doc.links,
-    }
+    return raw
   }
 
   // ─── Documents CRUD ───────────────────────────────────────────────────────
