@@ -15,6 +15,8 @@ https://github.com/jrcruciani/obsidian-memory-for-ai
 
 https://dev.to/oracledevs/agent-memory-why-your-ai-has-amnesia-and-how-to-fix-it-475e?customTrackingParam=:ad:vd:yt:awr:a_nas::RC_DEVT260304P00029:Omer
 
+Also read ./ESSEY-1.md and ./ESSEY-2.md for better context.
+
 Obsidian CLI is interesting to research as well, we may use it as well.
 
 
