@@ -44,14 +44,16 @@ export class SearchService {
       scores.set(id, (scores.get(id) || 0) + 1 / (k + rank))
     }
 
-    // Sort by RRF score descending
     const merged = [...scores.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, limit)
 
-    // Fetch metadata and generate snippets
+    return this.buildResults(kb, merged, query)
+  }
+
+  async buildResults(kb: string, scored: [string, number][], query: string = ''): Promise<SearchResult[]> {
     const results: SearchResult[] = []
-    for (const [id, score] of merged) {
+    for (const [id, score] of scored) {
       const doc = await this.index.getDoc(kb, id)
       if (!doc) continue
 
@@ -60,9 +62,7 @@ export class SearchService {
       try {
         const parsed = this.storage.readDoc(kb, filename)
         body = parsed.body
-      } catch {
-        // File might not exist on disk
-      }
+      } catch {}
 
       results.push({
         id,

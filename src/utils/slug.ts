@@ -25,3 +25,7 @@ export function toFilename(id: string): string {
 export function toDocId(filename: string): string {
   return filename.replace(/\.md$/, '')
 }
+
+export function today(): string {
+  return new Date().toISOString().split('T')[0]
+}

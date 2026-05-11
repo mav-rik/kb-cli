@@ -1,5 +1,3 @@
-import * as fs from 'node:fs'
-import * as path from 'node:path'
 import { Controller, Cli, CliOption, Description, Optional } from '@moostjs/event-cli'
 import { services } from '../services/container.js'
 import { toDocId } from '../utils/slug.js'
@@ -54,11 +52,13 @@ export class LintController {
 
     const files = this.storage.listFiles(kbName)
     for (const file of files) {
-      const doc = this.storage.readDoc(kbName, file)
+      const raw = this.storage.readRaw(kbName, file)
+      const parsed = this.parser.parse(raw)
+
       const missing: string[] = []
-      if (!doc.frontmatter.id) missing.push('id')
-      if (!doc.frontmatter.title) missing.push('title')
-      if (!doc.frontmatter.category) missing.push('category')
+      if (!parsed.frontmatter.id) missing.push('id')
+      if (!parsed.frontmatter.title) missing.push('title')
+      if (!parsed.frontmatter.category) missing.push('category')
       if (missing.length > 0) {
         issues.push({
           type: 'missing',
@@ -67,11 +67,7 @@ export class LintController {
           details: `Missing frontmatter: ${missing.join(', ')}`,
         })
       }
-    }
 
-    for (const file of files) {
-      const raw = this.storage.readRaw(kbName, file)
-      const parsed = this.parser.parse(raw)
       const fileHash = contentHash(parsed.body)
       const docId = toDocId(file)
       const indexDoc = await this.index.getDoc(kbName, docId)
@@ -112,7 +108,6 @@ export class LintController {
             title: doc.frontmatter.title,
             category: doc.frontmatter.category,
             tags: doc.frontmatter.tags,
-            content: doc.body,
             filePath: issue.file,
             contentHash: contentHash(doc.body),
           })

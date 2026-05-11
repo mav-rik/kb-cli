@@ -4,13 +4,11 @@ import * as os from 'node:os'
 
 export interface AiMemoryConfig {
   defaultKb: string
-  dataDir: string
   embeddingModel: string
 }
 
 const DEFAULT_CONFIG: AiMemoryConfig = {
   defaultKb: 'default',
-  dataDir: '~/.ai-memory',
   embeddingModel: 'all-MiniLM-L6-v2',
 }
 
@@ -82,7 +80,7 @@ export class ConfigService {
 
   set(key: keyof AiMemoryConfig, value: string): void {
     const config = this.loadConfig()
-    ;(config as Record<string, string>)[key] = value
+    config[key] = value
     this.saveConfig(config)
   }
 }

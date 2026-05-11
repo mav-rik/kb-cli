@@ -1,7 +1,7 @@
 import { Controller, Cli, Param, CliOption, Description, Optional } from '@moostjs/event-cli'
 import { services } from '../services/container.js'
 import { SearchResult } from '../services/search.service.js'
-import { toDocId } from '../utils/slug.js'
+import { toDocId, toFilename } from '../utils/slug.js'
 
 @Controller()
 export class SearchController {
@@ -10,7 +10,6 @@ export class SearchController {
   private get storage() { return services.storage }
   private get embedding() { return services.embedding }
   private get vector() { return services.vector }
-  private get index() { return services.index }
 
   @Cli('search/:query')
   @Description('Search documents (hybrid semantic + keyword)')
@@ -46,7 +45,7 @@ export class SearchController {
   ): Promise<string | object> {
     const parsedLimit = limit ? parseInt(limit, 10) : 10
     const resolvedKb = this.config.resolveKb(kb)
-    const filename = id.endsWith('.md') ? id : `${id}.md`
+    const filename = toFilename(id)
     const docId = toDocId(filename)
 
     if (!this.storage.docExists(resolvedKb, filename)) {
@@ -60,25 +59,8 @@ export class SearchController {
     const vecResults = this.vector.searchVec(resolvedKb, queryVec, parsedLimit + 1)
     const filtered = vecResults.filter((r) => r.id !== docId).slice(0, parsedLimit)
 
-    const results: SearchResult[] = []
-    for (const { id: relId, distance } of filtered) {
-      const doc = await this.index.getDoc(resolvedKb, relId)
-      if (!doc) continue
-      const relFilename = doc.filePath || `${relId}.md`
-      let body = ''
-      try {
-        const relParsed = this.storage.readDoc(resolvedKb, relFilename)
-        body = relParsed.body
-      } catch {}
-      results.push({
-        id: relId,
-        title: doc.title,
-        category: doc.category,
-        score: 1 / (1 + distance),
-        snippet: body.slice(0, 100).replace(/\n+/g, ' ').trim(),
-        filename: relFilename,
-      })
-    }
+    const scored: [string, number][] = filtered.map(({ id: relId, distance }) => [relId, 1 / (1 + distance)])
+    const results = await this.searchService.buildResults(resolvedKb, scored)
 
     if (results.length === 0) {
       return 'No related documents found.'

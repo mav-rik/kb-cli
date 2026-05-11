@@ -13,6 +13,19 @@ interface AgentConfig {
   install: (cwd: string) => string[]
 }
 
+function appendOrCreate(filePath: string, content: string, label: string): string[] {
+  if (fs.existsSync(filePath)) {
+    const existing = fs.readFileSync(filePath, 'utf-8')
+    if (existing.includes('aimem')) {
+      return [`  ${label} already contains aimem (skipped)`]
+    }
+    fs.appendFileSync(filePath, '\n\n' + content)
+  } else {
+    fs.writeFileSync(filePath, content)
+  }
+  return [`  ${label}`]
+}
+
 const AGENTS: AgentConfig[] = [
   {
     id: 'claude',
@@ -50,17 +63,7 @@ const AGENTS: AgentConfig[] = [
     name: 'Codex CLI',
     install: (cwd: string) => {
       const content = fs.readFileSync(path.join(setupDir, 'codex-agents.md'), 'utf-8')
-      const agentsPath = path.join(cwd, 'AGENTS.md')
-      if (fs.existsSync(agentsPath)) {
-        const existing = fs.readFileSync(agentsPath, 'utf-8')
-        if (existing.includes('aimem')) {
-          return [`  AGENTS.md already contains aimem (skipped)`]
-        }
-        fs.appendFileSync(agentsPath, '\n\n' + content)
-      } else {
-        fs.writeFileSync(agentsPath, content)
-      }
-      return [`  AGENTS.md`]
+      return appendOrCreate(path.join(cwd, 'AGENTS.md'), content, 'AGENTS.md')
     },
   },
   {
@@ -68,17 +71,7 @@ const AGENTS: AgentConfig[] = [
     name: 'Cline',
     install: (cwd: string) => {
       const content = fs.readFileSync(path.join(setupDir, 'generic-rules.md'), 'utf-8')
-      const rulesPath = path.join(cwd, '.clinerules')
-      if (fs.existsSync(rulesPath)) {
-        const existing = fs.readFileSync(rulesPath, 'utf-8')
-        if (existing.includes('aimem')) {
-          return [`  .clinerules already contains aimem (skipped)`]
-        }
-        fs.appendFileSync(rulesPath, '\n\n' + content)
-      } else {
-        fs.writeFileSync(rulesPath, content)
-      }
-      return [`  .clinerules`]
+      return appendOrCreate(path.join(cwd, '.clinerules'), content, '.clinerules')
     },
   },
   {
@@ -86,17 +79,7 @@ const AGENTS: AgentConfig[] = [
     name: 'Windsurf',
     install: (cwd: string) => {
       const content = fs.readFileSync(path.join(setupDir, 'generic-rules.md'), 'utf-8')
-      const rulesPath = path.join(cwd, '.windsurfrules')
-      if (fs.existsSync(rulesPath)) {
-        const existing = fs.readFileSync(rulesPath, 'utf-8')
-        if (existing.includes('aimem')) {
-          return [`  .windsurfrules already contains aimem (skipped)`]
-        }
-        fs.appendFileSync(rulesPath, '\n\n' + content)
-      } else {
-        fs.writeFileSync(rulesPath, content)
-      }
-      return [`  .windsurfrules`]
+      return appendOrCreate(path.join(cwd, '.windsurfrules'), content, '.windsurfrules')
     },
   },
   {
@@ -126,7 +109,6 @@ export class SetupController {
     const cwd = process.cwd()
     const output: string[] = []
 
-    // Determine which agents to install
     let toInstall: AgentConfig[]
     if (all) {
       toInstall = AGENTS
@@ -167,7 +149,6 @@ export class SetupController {
       output.push('')
     }
 
-    // Create aimem.config.json if not exists
     const configPath = path.join(cwd, 'aimem.config.json')
     if (!fs.existsSync(configPath)) {
       const defaultKb = this.config.get('defaultKb')

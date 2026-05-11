@@ -2,7 +2,7 @@ import * as fs from 'node:fs'
 import { Controller, Cli, Param, CliOption, Description, Optional } from '@moostjs/event-cli'
 import { services } from '../services/container.js'
 import { DocFrontmatter } from '../services/parser.service.js'
-import { slugify, toFilename, toDocId } from '../utils/slug.js'
+import { slugify, toFilename, toDocId, today } from '../utils/slug.js'
 import { contentHash } from '../utils/hash.js'
 
 @Controller()
@@ -81,7 +81,6 @@ export class DocController {
       body = content
     }
 
-    const today = new Date().toISOString().split('T')[0]
     const frontmatter: DocFrontmatter = {
       id,
       title: fileFrontmatter?.title || title,
@@ -91,8 +90,8 @@ export class DocController {
         : tags
           ? tags.split(',').map((t) => t.trim())
           : [],
-      created: today,
-      updated: today,
+      created: today(),
+      updated: today(),
     }
 
     this.storage.writeDoc(kbName, filename, frontmatter, body)
@@ -138,7 +137,7 @@ export class DocController {
       ...(title !== undefined && { title }),
       ...(category !== undefined && { category }),
       ...(tags !== undefined && { tags: tags.split(',').map((t) => t.trim()) }),
-      updated: new Date().toISOString().split('T')[0],
+      updated: today(),
     }
 
     let body = doc.body
@@ -209,11 +208,10 @@ export class DocController {
 
     const doc = this.storage.readDoc(kbName, oldFilename)
 
-    const today = new Date().toISOString().split('T')[0]
     const frontmatter = {
       ...doc.frontmatter,
       id: newId,
-      updated: today,
+      updated: today(),
     }
 
     this.storage.writeDoc(kbName, newFilename, frontmatter, doc.body)

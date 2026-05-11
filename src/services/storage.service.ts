@@ -54,21 +54,6 @@ export class StorageService {
   }
 
   /**
-   * Read specific lines from a document (1-indexed, inclusive).
-   * Returns the selected lines and the total line count of the file.
-   */
-  readLines(kb: string, filename: string, start: number, end: number): { lines: string[]; total: number } {
-    const raw = this.readRaw(kb, filename)
-    const allLines = raw.split('\n')
-    const total = allLines.length
-    // Clamp to valid range (1-indexed)
-    const s = Math.max(1, start)
-    const e = Math.min(total, end)
-    const lines = allLines.slice(s - 1, e)
-    return { lines, total }
-  }
-
-  /**
    * Write a document with frontmatter and body to disk.
    * Creates the docs directory if it does not exist.
    */
@@ -87,16 +72,6 @@ export class StorageService {
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath)
     }
-  }
-
-  /**
-   * Rename a document file within the same KB.
-   */
-  renameDoc(kb: string, oldFilename: string, newFilename: string): void {
-    const docsDir = this.getDocsDir(kb)
-    const oldPath = path.join(docsDir, oldFilename)
-    const newPath = path.join(docsDir, newFilename)
-    fs.renameSync(oldPath, newPath)
   }
 
   /**

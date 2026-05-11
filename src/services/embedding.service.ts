@@ -20,7 +20,6 @@ export class EmbeddingService {
   }
 
   private async _loadModel(): Promise<void> {
-    // Cache models in ~/.ai-memory/models/
     env.cacheDir = path.join(os.homedir(), '.ai-memory', '.models')
 
     process.stderr.write('Loading embedding model...\n')
