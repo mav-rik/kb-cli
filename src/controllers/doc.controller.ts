@@ -3,7 +3,6 @@ import { Controller, Cli, Param, CliOption, Description, Optional } from '@moost
 import { services } from '../services/container.js'
 import { DocFrontmatter } from '../services/parser.service.js'
 import { slugify, toFilename, toDocId, today } from '../utils/slug.js'
-import { contentHash } from '../utils/hash.js'
 
 @Controller()
 export class DocController {
@@ -12,34 +11,7 @@ export class DocController {
   private get parser() { return services.parser }
   private get index() { return services.index }
   private get linker() { return services.linker }
-  private get embedding() { return services.embedding }
-  private get vector() { return services.vector }
-  private get fts() { return services.fts }
-
-  private async indexAndEmbed(kb: string, docId: string, frontmatter: DocFrontmatter, body: string, filename: string): Promise<void> {
-    const links = this.parser.extractLinks(body)
-
-    await this.index.upsertDoc(kb, {
-      id: docId,
-      title: frontmatter.title,
-      category: frontmatter.category,
-      tags: frontmatter.tags,
-      filePath: filename,
-      contentHash: contentHash(body),
-    })
-
-    await this.index.upsertLinks(
-      kb,
-      docId,
-      links.map((l) => ({ toId: toDocId(l.target), linkText: l.text })),
-    )
-
-    this.fts.upsert(kb, docId, frontmatter.title, frontmatter.tags || [], body)
-
-    this.vector.ensureTables(kb)
-    const vec = await this.embedding.embed(body)
-    this.vector.upsertVec(kb, docId, vec)
-  }
+  private get workflow() { return services.docWorkflow }
 
   @Cli('add')
   @Description('Add a new document')
@@ -104,7 +76,7 @@ export class DocController {
       }
     }
 
-    await this.indexAndEmbed(kbName, id, frontmatter, body, filename)
+    await this.workflow.indexAndEmbed(kbName, id, frontmatter, body, filename)
 
     const output = [`Created: ${filename}`]
     output.push(...warnings)
@@ -148,7 +120,7 @@ export class DocController {
     }
 
     this.storage.writeDoc(kbName, filename, frontmatter, body)
-    await this.indexAndEmbed(kbName, docId, frontmatter, body, filename)
+    await this.workflow.indexAndEmbed(kbName, docId, frontmatter, body, filename)
 
     return `Updated: ${filename}`
   }
@@ -177,10 +149,7 @@ export class DocController {
     }
 
     this.storage.deleteDoc(kbName, filename)
-    await this.index.deleteDoc(kbName, docId)
-    this.vector.ensureTables(kbName)
-    this.vector.deleteVec(kbName, docId)
-    this.fts.delete(kbName, docId)
+    await this.workflow.removeFromIndex(kbName, docId)
 
     const output = [`Deleted: ${filename}`]
     output.push(...warnings)
@@ -219,9 +188,8 @@ export class DocController {
 
     const modifiedCount = await this.linker.updateLinksAcrossKb(kbName, oldFilename, newFilename)
 
-    await this.index.deleteDoc(kbName, oldId)
-    this.fts.delete(kbName, oldId)
-    await this.indexAndEmbed(kbName, newId, frontmatter, doc.body, newFilename)
+    await this.workflow.removeFromIndex(kbName, oldId)
+    await this.workflow.indexAndEmbed(kbName, newId, frontmatter, doc.body, newFilename)
 
     // Update index for docs whose links now point to newId
     const files = this.storage.listFiles(kbName)

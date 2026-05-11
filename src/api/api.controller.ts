@@ -1,48 +1,18 @@
-import * as fs from 'node:fs'
-import * as path from 'node:path'
 import { Controller, Param } from 'moost'
 import { Get, Post, Put, Delete, Body, Query, SetStatus } from '@moostjs/event-http'
 import { services } from '../services/container.js'
 import { slugify, toFilename, toDocId, today } from '../utils/slug.js'
-import { contentHash } from '../utils/hash.js'
 import { DocFrontmatter } from '../services/parser.service.js'
 
 @Controller('api')
 export class ApiController {
   private get config() { return services.config }
   private get storage() { return services.storage }
-  private get parser() { return services.parser }
   private get index() { return services.index }
   private get linker() { return services.linker }
-  private get embedding() { return services.embedding }
-  private get vector() { return services.vector }
-  private get fts() { return services.fts }
   private get searchService() { return services.search }
-
-  private async indexAndEmbed(kb: string, docId: string, frontmatter: DocFrontmatter, body: string, filename: string): Promise<void> {
-    const links = this.parser.extractLinks(body)
-
-    await this.index.upsertDoc(kb, {
-      id: docId,
-      title: frontmatter.title,
-      category: frontmatter.category,
-      tags: frontmatter.tags,
-      filePath: filename,
-      contentHash: contentHash(body),
-    })
-
-    await this.index.upsertLinks(
-      kb,
-      docId,
-      links.map((l) => ({ toId: toDocId(l.target), linkText: l.text })),
-    )
-
-    this.fts.upsert(kb, docId, frontmatter.title, frontmatter.tags || [], body)
-
-    this.vector.ensureTables(kb)
-    const vec = await this.embedding.embed(body)
-    this.vector.upsertVec(kb, docId, vec)
-  }
+  private get workflow() { return services.docWorkflow }
+  private get kbMgmt() { return services.kbManagement }
 
   // ─── Search ───────────────────────────────────────────────────────────────
 
@@ -106,7 +76,7 @@ export class ApiController {
     }
 
     this.storage.writeDoc(kbName, filename, frontmatter, body.content || '')
-    await this.indexAndEmbed(kbName, id, frontmatter, body.content || '', filename)
+    await this.workflow.indexAndEmbed(kbName, id, frontmatter, body.content || '', filename)
 
     return { id, filename }
   }
@@ -139,7 +109,7 @@ export class ApiController {
     }
 
     this.storage.writeDoc(kbName, filename, frontmatter, docBody)
-    await this.indexAndEmbed(kbName, docId, frontmatter, docBody, filename)
+    await this.workflow.indexAndEmbed(kbName, docId, frontmatter, docBody, filename)
 
     return { id: docId, filename }
   }
@@ -162,10 +132,7 @@ export class ApiController {
     }
 
     this.storage.deleteDoc(kbName, filename)
-    await this.index.deleteDoc(kbName, docId)
-    this.vector.ensureTables(kbName)
-    this.vector.deleteVec(kbName, docId)
-    this.fts.delete(kbName, docId)
+    await this.workflow.removeFromIndex(kbName, docId)
 
     return { deleted: filename, warnings }
   }
@@ -181,14 +148,7 @@ export class ApiController {
       return { error: `Document "${filename}" not found in KB "${resolvedKb}".` }
     }
 
-    const parsed = this.storage.readDoc(resolvedKb, filename)
-    const queryText = `${parsed.frontmatter.title} ${parsed.body}`.slice(0, 500)
-    const queryVec = await this.embedding.embed(queryText)
-
-    const vecResults = this.vector.searchVec(resolvedKb, queryVec, parsedLimit + 1)
-    const filtered = vecResults.filter((r) => r.id !== docId).slice(0, parsedLimit)
-
-    const scored: [string, number][] = filtered.map(({ id: relId, distance }) => [relId, 1 / (1 + distance)])
+    const scored = await this.workflow.findRelated(resolvedKb, docId, filename, parsedLimit)
     return this.searchService.buildResults(resolvedKb, scored)
   }
 
@@ -215,9 +175,8 @@ export class ApiController {
 
     const linksUpdated = await this.linker.updateLinksAcrossKb(kbName, oldFilename, newFilename)
 
-    await this.index.deleteDoc(kbName, toDocId(oldFilename))
-    this.fts.delete(kbName, toDocId(oldFilename))
-    await this.indexAndEmbed(kbName, newId, frontmatter, doc.body, newFilename)
+    await this.workflow.removeFromIndex(kbName, toDocId(oldFilename))
+    await this.workflow.indexAndEmbed(kbName, newId, frontmatter, doc.body, newFilename)
 
     return { oldId: id, newId, linksUpdated }
   }
@@ -241,45 +200,18 @@ export class ApiController {
 
   @Get('kb')
   listKbs() {
-    const dataDir = this.config.getDataDir()
-    if (!fs.existsSync(dataDir)) return []
-
-    const entries = fs.readdirSync(dataDir, { withFileTypes: true })
-    return entries
-      .filter((e) => e.isDirectory() && !e.name.startsWith('.') && fs.existsSync(path.join(dataDir, e.name, 'docs')))
-      .map((e) => e.name)
+    return this.kbMgmt.list()
   }
 
   @Post('kb')
   @SetStatus(201)
   createKb(@Body() body: { name: string }) {
-    const name = body.name
-    if (!name || !/^[a-z0-9][a-z0-9_-]*$/.test(name)) {
-      return { error: 'KB name must contain only lowercase letters, numbers, dashes, and underscores.' }
-    }
-
-    const dataDir = this.config.getDataDir()
-    const kbDir = path.join(dataDir, name, 'docs')
-
-    if (fs.existsSync(kbDir)) {
-      return { error: `Knowledge base "${name}" already exists.` }
-    }
-
-    fs.mkdirSync(kbDir, { recursive: true })
-    return { name }
+    return this.kbMgmt.create(body.name)
   }
 
   @Delete('kb/:name')
   deleteKb(@Param('name') name: string) {
-    const dataDir = this.config.getDataDir()
-    const kbDir = path.join(dataDir, name)
-
-    if (!fs.existsSync(path.join(kbDir, 'docs'))) {
-      return { error: `Knowledge base "${name}" does not exist.` }
-    }
-
-    fs.rmSync(kbDir, { recursive: true, force: true })
-    return { deleted: name }
+    return this.kbMgmt.delete(name)
   }
 
   // ─── Lint ─────────────────────────────────────────────────────────────────
@@ -287,103 +219,15 @@ export class ApiController {
   @Get('lint')
   async lint(@Query('kb') kb: string) {
     const kbName = this.config.resolveKb(kb)
-    const issues: { type: string; severity: string; file: string; details: string }[] = []
-
-    const brokenLinks = this.linker.findBrokenLinks(kbName)
-    for (const bl of brokenLinks) {
-      issues.push({
-        type: 'broken',
-        severity: 'error',
-        file: bl.fromFile,
-        details: `Link to ./${bl.targetFile} not found`,
-      })
-    }
-
-    const orphans = await this.linker.findOrphans(kbName)
-    for (const orphan of orphans) {
-      issues.push({
-        type: 'orphan',
-        severity: 'warning',
-        file: orphan,
-        details: 'No incoming links',
-      })
-    }
-
-    const files = this.storage.listFiles(kbName)
-    for (const file of files) {
-      const raw = this.storage.readRaw(kbName, file)
-      const parsed = this.parser.parse(raw)
-
-      const missing: string[] = []
-      if (!parsed.frontmatter.id) missing.push('id')
-      if (!parsed.frontmatter.title) missing.push('title')
-      if (!parsed.frontmatter.category) missing.push('category')
-      if (missing.length > 0) {
-        issues.push({
-          type: 'missing',
-          severity: 'error',
-          file,
-          details: `Missing frontmatter: ${missing.join(', ')}`,
-        })
-      }
-
-      const fileHash = contentHash(parsed.body)
-      const docId = toDocId(file)
-      const indexDoc = await this.index.getDoc(kbName, docId)
-      if (indexDoc && indexDoc.contentHash !== fileHash) {
-        issues.push({
-          type: 'drift',
-          severity: 'warning',
-          file,
-          details: 'Index out of sync with file content',
-        })
-      }
-    }
-
-    return issues
+    return this.workflow.lint(kbName)
   }
 
   @Post('lint/fix')
   async lintFix(@Query('kb') kb: string) {
     const kbName = this.config.resolveKb(kb)
-    let fixedCount = 0
-
-    const brokenLinks = this.linker.findBrokenLinks(kbName)
-    for (const bl of brokenLinks) {
-      const raw = this.storage.readRaw(kbName, bl.fromFile)
-      const target = bl.targetFile
-      const linkPattern = new RegExp(
-        `\\[([^\\]]+)\\]\\(\\.\\/` + target.replace(/\./g, '\\.') + `\\)`,
-        'g',
-      )
-      const fixed = raw.replace(linkPattern, '$1')
-      if (fixed !== raw) {
-        const parsed = this.parser.parse(fixed)
-        this.storage.writeDoc(kbName, bl.fromFile, parsed.frontmatter, parsed.body)
-        fixedCount++
-      }
-    }
-
-    const files = this.storage.listFiles(kbName)
-    for (const file of files) {
-      const doc = this.storage.readDoc(kbName, file)
-      const docId = toDocId(file)
-      const fileHash = contentHash(doc.body)
-      const indexDoc = await this.index.getDoc(kbName, docId)
-      if (indexDoc && indexDoc.contentHash !== fileHash) {
-        await this.index.upsertDoc(kbName, {
-          id: docId,
-          title: doc.frontmatter.title,
-          category: doc.frontmatter.category,
-          tags: doc.frontmatter.tags,
-          filePath: file,
-          contentHash: fileHash,
-        })
-        fixedCount++
-      }
-    }
-
-    return { fixed: fixedCount }
+    const issues = await this.workflow.lint(kbName)
+    const fixed = await this.workflow.lintFix(kbName, issues)
+    return { fixed }
   }
 
   // ─── Reindex ──────────────────────────────────────────────────────────────
@@ -391,45 +235,7 @@ export class ApiController {
   @Post('reindex')
   async reindex(@Query('kb') kb: string) {
     const kbName = this.config.resolveKb(kb)
-    const startTime = Date.now()
-
-    await this.index.dropAll(kbName)
-    this.vector.ensureTables(kbName)
-    this.vector.dropAll(kbName)
-    this.fts.dropAll(kbName)
-
-    const files = this.storage.listFiles(kbName)
-
-    for (const file of files) {
-      const doc = this.storage.readDoc(kbName, file)
-      const docId = toDocId(file)
-      const hash = contentHash(doc.body)
-
-      await this.index.upsertDoc(kbName, {
-        id: docId,
-        title: doc.frontmatter.title,
-        category: doc.frontmatter.category,
-        tags: doc.frontmatter.tags,
-        filePath: file,
-        contentHash: hash,
-      })
-
-      if (doc.links.length > 0) {
-        await this.index.upsertLinks(
-          kbName,
-          docId,
-          doc.links.map((l) => ({ toId: toDocId(l.target), linkText: l.text })),
-        )
-      }
-
-      this.fts.upsert(kbName, docId, doc.frontmatter.title, doc.frontmatter.tags || [], doc.body || '')
-
-      const embedding = await this.embedding.embed(doc.body || doc.frontmatter.title)
-      this.vector.upsertVec(kbName, docId, embedding)
-    }
-
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
-    return { count: files.length, elapsed: `${elapsed}s` }
+    return this.workflow.reindex(kbName)
   }
 
   // ─── Table of Contents ────────────────────────────────────────────────────

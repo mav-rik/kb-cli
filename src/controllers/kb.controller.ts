@@ -3,45 +3,23 @@ import * as path from 'node:path'
 import { Controller, Cli, Param, CliOption, Description } from '@moostjs/event-cli'
 import { services } from '../services/container.js'
 
-const VALID_KB_NAME = /^[a-z0-9][a-z0-9_-]*$/
-
 @Controller('kb')
 export class KbController {
   private get config() { return services.config }
-
-  private validateName(name: string): string | null {
-    if (name.startsWith('.')) {
-      return `Error: KB name cannot start with ".".`
-    }
-    if (!VALID_KB_NAME.test(name)) {
-      return `Error: KB name must contain only lowercase letters, numbers, dashes, and underscores (got "${name}").`
-    }
-    return null
-  }
+  private get kbMgmt() { return services.kbManagement }
 
   @Cli('create/:name')
   @Description('Create a new knowledge base')
   create(@Param('name') name: string) {
-    const err = this.validateName(name)
-    if (err) return err
-
-    const dataDir = this.config.getDataDir()
-    const kbDir = path.join(dataDir, name, 'docs')
-
-    if (fs.existsSync(kbDir)) {
-      return `Error: Knowledge base "${name}" already exists.`
-    }
-
-    fs.mkdirSync(kbDir, { recursive: true })
+    const result = this.kbMgmt.create(name)
+    if ('error' in result) return `Error: ${result.error}`
     return `Created knowledge base "${name}".`
   }
 
   @Cli('use/:name')
   @Description('Set the default knowledge base')
   use(@Param('name') name: string) {
-    const dataDir = this.config.getDataDir()
-    const kbDir = path.join(dataDir, name, 'docs')
-    if (!fs.existsSync(kbDir)) {
+    if (!this.kbMgmt.exists(name)) {
       return `Error: Knowledge base "${name}" does not exist. Run \`aimem kb create ${name}\` first.`
     }
     this.config.set('defaultKb', name)
@@ -51,21 +29,10 @@ export class KbController {
   @Cli('list')
   @Description('List all knowledge bases')
   list() {
-    const dataDir = this.config.getDataDir()
-
-    if (!fs.existsSync(dataDir)) {
-      return 'No knowledge bases found.'
-    }
-
-    const entries = fs.readdirSync(dataDir, { withFileTypes: true })
-    const kbs = entries
-      .filter((e) => e.isDirectory() && !e.name.startsWith('.') && fs.existsSync(path.join(dataDir, e.name, 'docs')))
-      .map((e) => e.name)
-
+    const kbs = this.kbMgmt.list()
     if (kbs.length === 0) {
       return 'No knowledge bases found.'
     }
-
     return kbs.join('\n')
   }
 
@@ -81,26 +48,20 @@ export class KbController {
       return 'Error: Cannot delete the "default" KB without --force flag.'
     }
 
-    const dataDir = this.config.getDataDir()
-    const kbDir = path.join(dataDir, name)
-
-    if (!fs.existsSync(path.join(kbDir, 'docs'))) {
-      return `Error: Knowledge base "${name}" does not exist.`
-    }
-
-    fs.rmSync(kbDir, { recursive: true, force: true })
+    const result = this.kbMgmt.delete(name)
+    if ('error' in result) return `Error: ${result.error}`
     return `Deleted knowledge base "${name}".`
   }
 
   @Cli('info/:name')
   @Description('Show info about a knowledge base')
   info(@Param('name') name: string) {
-    const dataDir = this.config.getDataDir()
-    const docsDir = path.join(dataDir, name, 'docs')
-
-    if (!fs.existsSync(docsDir)) {
+    if (!this.kbMgmt.exists(name)) {
       return `Error: Knowledge base "${name}" does not exist.`
     }
+
+    const dataDir = this.config.getDataDir()
+    const docsDir = path.join(dataDir, name, 'docs')
 
     const files = fs.readdirSync(docsDir)
     let totalSize = 0

@@ -7,6 +7,8 @@ import { EmbeddingService } from './embedding.service.js'
 import { VectorService } from './vector.service.js'
 import { FtsService } from './fts.service.js'
 import { SearchService } from './search.service.js'
+import { DocWorkflowService } from './doc-workflow.service.js'
+import { KbManagementService } from './kb-management.service.js'
 
 class ServiceContainer {
   readonly config = new ConfigService()
@@ -18,6 +20,8 @@ class ServiceContainer {
   readonly vector: VectorService
   readonly fts: FtsService
   readonly search: SearchService
+  readonly docWorkflow: DocWorkflowService
+  readonly kbManagement: KbManagementService
 
   constructor() {
     this.index = new IndexService(this.config)
@@ -26,6 +30,8 @@ class ServiceContainer {
     this.storage = new StorageService(this.config, this.parser)
     this.linker = new LinkerService(this.storage, this.parser, this.index)
     this.search = new SearchService(this.embedding, this.vector, this.fts, this.index, this.storage)
+    this.docWorkflow = new DocWorkflowService(this.parser, this.index, this.linker, this.embedding, this.vector, this.fts, this.storage)
+    this.kbManagement = new KbManagementService(this.config)
   }
 }
 

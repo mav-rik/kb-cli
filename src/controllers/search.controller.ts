@@ -8,8 +8,7 @@ export class SearchController {
   private get config() { return services.config }
   private get searchService() { return services.search }
   private get storage() { return services.storage }
-  private get embedding() { return services.embedding }
-  private get vector() { return services.vector }
+  private get workflow() { return services.docWorkflow }
 
   @Cli('search/:query')
   @Description('Search documents (hybrid semantic + keyword)')
@@ -52,14 +51,7 @@ export class SearchController {
       return `Error: Document "${filename}" not found in KB "${resolvedKb}".`
     }
 
-    const parsed = this.storage.readDoc(resolvedKb, filename)
-    const queryText = `${parsed.frontmatter.title} ${parsed.body}`.slice(0, 500)
-    const queryVec = await this.embedding.embed(queryText)
-
-    const vecResults = this.vector.searchVec(resolvedKb, queryVec, parsedLimit + 1)
-    const filtered = vecResults.filter((r) => r.id !== docId).slice(0, parsedLimit)
-
-    const scored: [string, number][] = filtered.map(({ id: relId, distance }) => [relId, 1 / (1 + distance)])
+    const scored = await this.workflow.findRelated(resolvedKb, docId, filename, parsedLimit)
     const results = await this.searchService.buildResults(resolvedKb, scored)
 
     if (results.length === 0) {
