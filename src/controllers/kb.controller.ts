@@ -36,6 +36,18 @@ export class KbController {
     return `Created knowledge base "${name}".`
   }
 
+  @Cli('use/:name')
+  @Description('Set the default knowledge base')
+  use(@Param('name') name: string) {
+    const dataDir = this.config.getDataDir()
+    const kbDir = path.join(dataDir, name, 'docs')
+    if (!fs.existsSync(kbDir)) {
+      return `Error: Knowledge base "${name}" does not exist. Run \`aimem kb create ${name}\` first.`
+    }
+    this.config.set('defaultKb', name)
+    return `Default knowledge base set to "${name}".`
+  }
+
   @Cli('list')
   @Description('List all knowledge bases')
   list() {
