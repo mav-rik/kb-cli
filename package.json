@@ -23,6 +23,14 @@
   "keywords": ["wiki", "knowledge-base", "ai", "llm", "memory", "cli", "semantic-search", "markdown"],
   "author": "Artem Maltsev <artem@maltsev.nl>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mav-rik/kb-cli.git"
+  },
+  "homepage": "https://github.com/mav-rik/kb-cli#readme",
+  "bugs": {
+    "url": "https://github.com/mav-rik/kb-cli/issues"
+  },
   "packageManager": "pnpm@10.18.3",
   "dependencies": {
     "@atscript/core": "^0.1.52",
