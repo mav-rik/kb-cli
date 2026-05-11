@@ -99,7 +99,11 @@ export class IndexService {
     const space = await this.getSpace(kb)
     const table = space.getTable(Link)
     await table.deleteMany({ fromId })
+    // Deduplicate by toId (keep first occurrence)
+    const seen = new Set<string>()
     for (const link of links) {
+      if (seen.has(link.toId)) continue
+      seen.add(link.toId)
       await table.insertOne({ fromId, toId: link.toId, linkText: link.linkText })
     }
   }

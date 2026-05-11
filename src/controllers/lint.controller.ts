@@ -204,7 +204,7 @@ export class LintController {
   }
 
   @Cli('toc')
-  @Description('Generate table of contents')
+  @Description('Display table of contents for a knowledge base')
   async toc(
     @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
   ): Promise<string> {
@@ -213,7 +213,7 @@ export class LintController {
     const docs = await this.index.listDocs(kbName)
 
     if (docs.length === 0) {
-      return 'No documents to generate TOC for.'
+      return 'No documents in this knowledge base.'
     }
 
     const grouped: Record<string, { id: string; title: string; filePath: string }[]> = {}
@@ -224,23 +224,19 @@ export class LintController {
     }
 
     const lines: string[] = []
-    lines.push(`# Knowledge Base: ${kbName}`)
+    lines.push(`# ${kbName} (${docs.length} documents)`)
     lines.push('')
 
     const categories = Object.keys(grouped).sort()
     for (const cat of categories) {
-      lines.push(`## ${cat}`)
+      lines.push(`## ${cat} (${grouped[cat].length})`)
       const items = grouped[cat].sort((a, b) => a.title.localeCompare(b.title))
       for (const item of items) {
-        lines.push(`- [${item.title}](./docs/${item.filePath})`)
+        lines.push(`  - ${item.title} [${item.id}.md]`)
       }
       lines.push('')
     }
 
-    const dataDir = this.config.getDataDir()
-    const indexPath = path.join(dataDir, kbName, 'index.md')
-    fs.writeFileSync(indexPath, lines.join('\n'), 'utf-8')
-
-    return `Generated index.md with ${docs.length} documents.`
+    return lines.join('\n')
   }
 }

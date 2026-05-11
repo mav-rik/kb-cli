@@ -42,11 +42,14 @@ export class VectorService {
 
   /**
    * Upsert a document's embedding vector.
+   * vec0 virtual tables do not support INSERT OR REPLACE,
+   * so we delete-then-insert for updates.
    */
   upsertVec(kb: string, id: string, embedding: Float32Array): void {
     const db = this.getDb(kb)
+    db.prepare(`DELETE FROM documents_vec WHERE id = ?`).run(id)
     db.prepare(`
-      INSERT OR REPLACE INTO documents_vec (id, embedding) VALUES (?, ?)
+      INSERT INTO documents_vec (id, embedding) VALUES (?, ?)
     `).run(id, Buffer.from(embedding.buffer))
   }
 
