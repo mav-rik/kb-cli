@@ -17,7 +17,8 @@ export class ReadController {
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ) {
     const kbName = this.config.resolveWiki(wiki)
-    const targetPath = follow ? follow.replace(/^\.\//, '') : docPath
+    let targetPath = follow ? follow.replace(/^\.\//, '') : docPath
+    if (!targetPath.endsWith('.md')) targetPath += '.md'
 
     if (!this.storage.docExists(kbName, targetPath)) {
       return `Error: Document "${targetPath}" not found in wiki "${kbName}".`
