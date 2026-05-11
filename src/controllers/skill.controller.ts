@@ -1,18 +1,5 @@
-import * as fs from 'node:fs'
-import * as path from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { Controller, Cli, Param, Description, Optional } from '@moostjs/event-cli'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const contentDir = path.resolve(__dirname, '..', 'content')
-
-function readContent(name: string): string {
-  const filePath = path.join(contentDir, name)
-  if (!fs.existsSync(filePath)) {
-    return `Error: Content file "${name}" not found at ${filePath}.`
-  }
-  return fs.readFileSync(filePath, 'utf-8')
-}
+import { Controller, Cli, Description } from '@moostjs/event-cli'
+import { readContent } from '../utils/content.js'
 
 @Controller('skill')
 export class SkillController {

@@ -29,3 +29,14 @@ export function toDocId(filename: string): string {
 export function today(): string {
   return new Date().toISOString().split('T')[0]
 }
+
+/**
+ * Parse a line range string like "5-20" against a total line count.
+ * Returns clamped 1-based start/end values.
+ */
+export function parseLineRange(text: string, totalLines: number): { start: number; end: number } {
+  const parts = text.split('-')
+  const start = Math.max(1, parseInt(parts[0], 10) || 1)
+  const end = Math.min(totalLines, parseInt(parts[1], 10) || totalLines)
+  return { start, end }
+}

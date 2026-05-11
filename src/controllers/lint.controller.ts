@@ -6,6 +6,8 @@ export class LintController {
   private get config() { return services.config }
   private get workflow() { return services.docWorkflow }
   private get schema() { return services.schema }
+  private get index() { return services.index }
+  private get activityLog() { return services.activityLog }
 
   @Cli('lint')
   @Description('Check knowledge base integrity')
@@ -70,7 +72,7 @@ export class LintController {
   ): Promise<string> {
     const kbName = this.config.resolveWiki(wiki)
 
-    const docs = await services.index.listDocs(kbName)
+    const docs = await this.index.listDocs(kbName)
 
     if (docs.length === 0) {
       return 'No documents in this knowledge base.'
@@ -108,7 +110,7 @@ export class LintController {
   ): string {
     const kbName = this.config.resolveWiki(wiki)
     const parsedLimit = limit ? parseInt(limit, 10) : 20
-    const entries = services.activityLog.recent(kbName, parsedLimit)
+    const entries = this.activityLog.recent(kbName, parsedLimit)
 
     if (entries.length === 0) {
       return 'No activity recorded.'

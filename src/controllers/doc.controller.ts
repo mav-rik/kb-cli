@@ -10,7 +10,6 @@ export class DocController {
   private get storage() { return services.storage }
   private get parser() { return services.parser }
   private get index() { return services.index }
-  private get linker() { return services.linker }
   private get workflow() { return services.docWorkflow }
   private get log() { return services.activityLog }
 
@@ -179,38 +178,7 @@ export class DocController {
       return `Error: Document "${newFilename}" already exists in wiki "${kbName}".`
     }
 
-    const doc = this.storage.readDoc(kbName, oldFilename)
-
-    const frontmatter = {
-      ...doc.frontmatter,
-      id: newId,
-      updated: today(),
-    }
-
-    this.storage.writeDoc(kbName, newFilename, frontmatter, doc.body)
-    this.storage.deleteDoc(kbName, oldFilename)
-
-    const modifiedCount = await this.linker.updateLinksAcrossKb(kbName, oldFilename, newFilename)
-
-    await this.workflow.removeFromIndex(kbName, oldId)
-    await this.workflow.indexAndEmbed(kbName, newId, frontmatter, doc.body, newFilename)
-
-    // Update index for docs whose links now point to newId
-    const files = this.storage.listFiles(kbName)
-    for (const file of files) {
-      if (file === newFilename) continue
-      const fileDoc = this.storage.readDoc(kbName, file)
-      const fileLinks = this.parser.extractLinks(fileDoc.body)
-      if (fileLinks.some((l) => l.target === newFilename)) {
-        const fileId = toDocId(file)
-        await this.index.upsertLinks(
-          kbName,
-          fileId,
-          fileLinks.map((l) => ({ toId: toDocId(l.target), linkText: l.text })),
-        )
-      }
-    }
-
+    const modifiedCount = await this.workflow.rename(kbName, oldId, newId, oldFilename, newFilename)
     this.log.log(kbName, 'rename', newId, `from=${oldId}`)
 
     const linkInfo = modifiedCount > 0

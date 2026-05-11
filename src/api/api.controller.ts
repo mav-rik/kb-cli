@@ -1,18 +1,9 @@
-import * as fs from 'node:fs'
-import * as path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { Controller, Param } from 'moost'
 import { Get, Post, Put, Delete, Body, Query, SetStatus } from '@moostjs/event-http'
 import { services } from '../services/container.js'
-import { slugify, toFilename, toDocId, today } from '../utils/slug.js'
+import { slugify, toFilename, toDocId, today, parseLineRange } from '../utils/slug.js'
+import { readContent } from '../utils/content.js'
 import { DocFrontmatter } from '../services/parser.service.js'
-
-function parseLineRange(text: string, totalLines: number): { start: number; end: number } {
-  const parts = text.split('-')
-  const start = Math.max(1, parseInt(parts[0], 10) || 1)
-  const end = Math.min(totalLines, parseInt(parts[1], 10) || totalLines)
-  return { start, end }
-}
 
 function sliceLines(content: string, lines?: string): string {
   if (!lines) return content
@@ -26,10 +17,11 @@ export class ApiController {
   private get config() { return services.config }
   private get storage() { return services.storage }
   private get index() { return services.index }
-  private get linker() { return services.linker }
   private get searchService() { return services.search }
   private get workflow() { return services.docWorkflow }
   private get wikiMgmt() { return services.wikiManagement }
+  private get activityLog() { return services.activityLog }
+  private get schema() { return services.schema }
 
   // ─── Search ───────────────────────────────────────────────────────────────
 
@@ -175,32 +167,7 @@ export class ApiController {
       return { error: `Document "${newFilename}" already exists in wiki "${wikiName}".` }
     }
 
-    const doc = this.storage.readDoc(wikiName, oldFilename)
-    const frontmatter = { ...doc.frontmatter, id: newId, updated: today() }
-
-    this.storage.writeDoc(wikiName, newFilename, frontmatter, doc.body)
-    this.storage.deleteDoc(wikiName, oldFilename)
-
-    const linksUpdated = await this.linker.updateLinksAcrossKb(wikiName, oldFilename, newFilename)
-
-    await this.workflow.removeFromIndex(wikiName, toDocId(oldFilename))
-    await this.workflow.indexAndEmbed(wikiName, newId, frontmatter, doc.body, newFilename)
-
-    // Re-index links for docs that now reference the new filename
-    const files = this.storage.listFiles(wikiName)
-    for (const file of files) {
-      if (file === newFilename) continue
-      const fileDoc = this.storage.readDoc(wikiName, file)
-      const fileLinks = services.parser.extractLinks(fileDoc.body)
-      if (fileLinks.some((l) => l.target === newFilename)) {
-        const fileId = toDocId(file)
-        await this.index.upsertLinks(
-          wikiName,
-          fileId,
-          fileLinks.map((l) => ({ toId: toDocId(l.target), linkText: l.text })),
-        )
-      }
-    }
+    const linksUpdated = await this.workflow.rename(wikiName, toDocId(oldFilename), newId, oldFilename, newFilename)
 
     return { oldId: id, newId, linksUpdated }
   }
@@ -285,7 +252,7 @@ export class ApiController {
   log(@Query('wiki') wiki: string, @Query('limit') limit: string) {
     const wikiName = this.config.resolveWiki(wiki)
     const parsedLimit = limit ? parseInt(limit, 10) : 20
-    return services.activityLog.recent(wikiName, parsedLimit)
+    return this.activityLog.recent(wikiName, parsedLimit)
   }
 
   // ─── Wiki Use ──────────────────────────────────────────────────────────────
@@ -303,14 +270,12 @@ export class ApiController {
 
   @Get('skill')
   skill(@Query('workflow') workflow: string) {
-    const __dirname = path.dirname(fileURLToPath(import.meta.url))
-    const contentDir = path.resolve(__dirname, '..', 'content')
     const filename = workflow ? `skill-${workflow}.md` : 'skill.md'
-    const filePath = path.join(contentDir, filename)
-    if (!fs.existsSync(filePath)) {
+    const content = readContent(filename)
+    if (content.startsWith('Error:')) {
       return { error: `Unknown workflow "${workflow}". Available: ingest, search, update, lint` }
     }
-    return fs.readFileSync(filePath, 'utf-8')
+    return content
   }
 
   // ─── Schema ────────────────────────────────────────────────────────────────
@@ -318,7 +283,7 @@ export class ApiController {
   @Get('schema')
   schemaRead(@Query('wiki') wiki: string) {
     const wikiName = this.config.resolveWiki(wiki)
-    const content = services.schema.read(wikiName)
+    const content = this.schema.read(wikiName)
     if (!content) return { error: 'No schema found. Call POST /api/schema to generate.' }
     return content
   }
@@ -326,7 +291,7 @@ export class ApiController {
   @Post('schema')
   async schemaUpdate(@Query('wiki') wiki: string) {
     const wikiName = this.config.resolveWiki(wiki)
-    await services.schema.update(wikiName)
+    await this.schema.update(wikiName)
     return { updated: true, wiki: wikiName }
   }
 }

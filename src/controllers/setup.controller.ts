@@ -2,7 +2,6 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Controller, Cli, CliOption, Description, Optional } from '@moostjs/event-cli'
-import { services } from '../services/container.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const setupDir = path.resolve(__dirname, '..', 'content', 'setup')
@@ -98,8 +97,6 @@ const AGENTS: AgentConfig[] = [
 
 @Controller()
 export class SetupController {
-  private get config() { return services.config }
-
   @Cli('setup')
   @Description('Set up kb integration for AI agents in current directory')
   setup(

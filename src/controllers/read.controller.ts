@@ -1,6 +1,6 @@
 import { Controller, Cli, Param, CliOption, Description, Optional } from '@moostjs/event-cli'
 import { services } from '../services/container.js'
-import { toFilename } from '../utils/slug.js'
+import { toFilename, parseLineRange } from '../utils/slug.js'
 
 @Controller('read')
 export class ReadController {
@@ -43,9 +43,7 @@ export class ReadController {
     let start = 1
     let end = totalLines
     if (lines) {
-      const parts = lines.split('-')
-      start = Math.max(1, parseInt(parts[0], 10) || 1)
-      end = Math.min(totalLines, parseInt(parts[1], 10) || totalLines)
+      ({ start, end } = parseLineRange(lines, totalLines))
     }
 
     const selectedLines = bodyLines.slice(start - 1, end)

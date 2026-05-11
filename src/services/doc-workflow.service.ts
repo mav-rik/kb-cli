@@ -225,6 +225,41 @@ export class DocWorkflowService {
   }
 
   /**
+   * Perform a full rename: move the doc, update cross-links, re-index everything.
+   * Returns the number of documents whose links were updated.
+   */
+  async rename(kb: string, oldId: string, newId: string, oldFilename: string, newFilename: string): Promise<number> {
+    const doc = this.storage.readDoc(kb, oldFilename)
+    const frontmatter = { ...doc.frontmatter, id: newId, updated: new Date().toISOString().split('T')[0] }
+
+    this.storage.writeDoc(kb, newFilename, frontmatter, doc.body)
+    this.storage.deleteDoc(kb, oldFilename)
+
+    const linksUpdated = await this.linker.updateLinksAcrossKb(kb, oldFilename, newFilename)
+
+    await this.removeFromIndex(kb, oldId)
+    await this.indexAndEmbed(kb, newId, frontmatter, doc.body, newFilename)
+
+    // Re-index links for docs that now reference the new filename
+    const files = this.storage.listFiles(kb)
+    for (const file of files) {
+      if (file === newFilename) continue
+      const fileDoc = this.storage.readDoc(kb, file)
+      const fileLinks = this.parser.extractLinks(fileDoc.body)
+      if (fileLinks.some((l) => l.target === newFilename)) {
+        const fileId = toDocId(file)
+        await this.index.upsertLinks(
+          kb,
+          fileId,
+          fileLinks.map((l) => ({ toId: toDocId(l.target), linkText: l.text })),
+        )
+      }
+    }
+
+    return linksUpdated
+  }
+
+  /**
    * Find documents related to a given doc via vector similarity.
    */
   async findRelated(kb: string, docId: string, filename: string, limit: number): Promise<[string, number][]> {
