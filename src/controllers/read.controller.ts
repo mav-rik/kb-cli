@@ -1,5 +1,6 @@
 import { Controller, Cli, Param, CliOption, Description, Optional } from '@moostjs/event-cli'
 import { services } from '../services/container.js'
+import { toFilename } from '../utils/slug.js'
 
 @Controller('read')
 export class ReadController {
@@ -17,8 +18,7 @@ export class ReadController {
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ) {
     const kbName = this.config.resolveWiki(wiki)
-    let targetPath = follow ? follow.replace(/^\.\//, '') : docPath
-    if (!targetPath.endsWith('.md')) targetPath += '.md'
+    const targetPath = toFilename(follow ? follow.replace(/^\.\//, '') : docPath)
 
     if (!this.storage.docExists(kbName, targetPath)) {
       return `Error: Document "${targetPath}" not found in wiki "${kbName}".`
