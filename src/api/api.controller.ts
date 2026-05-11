@@ -31,15 +31,15 @@ export class ApiController {
       name: 'kb',
       version: '0.1.0',
       endpoints: [
+        'GET  /api/health',
         'GET  /api/search?q=&wiki=&limit=&mode=fts|vec|hybrid',
-        'GET  /api/read/:id?wiki=&lines=&format=json',
-        'POST /api/docs  { title, category, tags[], content|body|text, wiki? }',
-        'PUT  /api/docs/:id  { title?, category?, tags?, content?, append?, wiki? }',
+        'GET  /api/read/:id?wiki=&lines=&meta=true&links=true&format=json',
+        'POST /api/docs  { title, category, tags[], body|content|text, wiki? }',
+        'PUT  /api/docs/:id  { title?, category?, tags?, body?, append?, wiki? }',
         'DELETE /api/docs/:id?wiki=',
-        'GET  /api/docs?wiki=&category=&tag=',
-        'GET  /api/list?wiki=&category=&tag=',
-        'GET  /api/docs/:id/related?wiki=&limit=',
-        'POST /api/docs/:id/rename  { newId|to, wiki? }',
+        'GET  /api/docs?wiki=&category=&tag=  (alias: /api/list)',
+        'GET  /api/related/:id?wiki=&limit=  (alias: /api/docs/:id/related)',
+        'POST /api/docs/:id/rename  { to|newId, wiki? }',
         'GET  /api/categories?wiki=',
         'GET  /api/lint?wiki=',
         'POST /api/lint/fix?wiki=',
@@ -48,12 +48,11 @@ export class ApiController {
         'GET  /api/schema?wiki=',
         'POST /api/schema?wiki=',
         'GET  /api/log?wiki=&limit=',
-        'GET  /api/wiki',
+        'GET  /api/wiki  (alias: /api/wikis)',
         'POST /api/wiki  { name }',
         'PUT  /api/wiki/use/:name',
         'DELETE /api/wiki/:name',
         'GET  /api/skill?workflow=',
-        'GET  /api/health',
       ],
     }
   }
@@ -77,7 +76,7 @@ export class ApiController {
   // ─── Read ─────────────────────────────────────────────────────────────────
 
   @Get('read/:filename')
-  async read(@Param('filename') filename: string, @Query('wiki') wiki: string, @Query('lines') lines: string, @Query('format') format: string) {
+  async read(@Param('filename') filename: string, @Query('wiki') wiki: string, @Query('lines') lines: string, @Query('format') format: string, @Query('meta') meta: string, @Query('links') links: string) {
     const resolvedWiki = this.config.resolveWiki(wiki)
     const targetPath = toFilename(filename)
 
@@ -85,8 +84,17 @@ export class ApiController {
       return { error: `Document "${targetPath}" not found in wiki "${resolvedWiki}".` }
     }
 
+    const doc = this.storage.readDoc(resolvedWiki, targetPath)
+
+    if (meta === 'true' || meta === '1') {
+      return doc.frontmatter
+    }
+
+    if (links === 'true' || links === '1') {
+      return doc.links
+    }
+
     if (format === 'json') {
-      const doc = this.storage.readDoc(resolvedWiki, targetPath)
       return { meta: doc.frontmatter, content: sliceLines(doc.body, lines), links: doc.links }
     }
 
@@ -182,6 +190,7 @@ export class ApiController {
   }
 
   @Get('docs/:id/related')
+  @Get('related/:id')
   async related(@Param('id') id: string, @Query('wiki') wiki: string, @Query('limit') limit: string) {
     const resolvedWiki = this.config.resolveWiki(wiki)
     const parsedLimit = limit ? parseInt(limit, 10) : 10
@@ -238,6 +247,7 @@ export class ApiController {
   // ─── Wikis ────────────────────────────────────────────────────────────────
 
   @Get('wiki')
+  @Get('wikis')
   listWikis() {
     return this.wikiMgmt.list()
   }
