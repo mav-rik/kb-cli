@@ -33,8 +33,8 @@ const AGENTS: AgentConfig[] = [
       const msgs: string[] = []
       const skillDir = path.join(cwd, '.claude', 'skills', 'kb')
       fs.mkdirSync(skillDir, { recursive: true })
-      fs.copyFileSync(path.join(setupDir, 'claude-skill.md'), path.join(skillDir, 'kb.md'))
-      msgs.push(`  .claude/skills/kb/kb.md`)
+      fs.copyFileSync(path.join(setupDir, 'claude-skill.md'), path.join(skillDir, 'SKILL.md'))
+      msgs.push(`  .claude/skills/kb/SKILL.md`)
 
       const cmdDir = path.join(cwd, '.claude', 'commands')
       fs.mkdirSync(cmdDir, { recursive: true })
