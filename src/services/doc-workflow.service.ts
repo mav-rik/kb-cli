@@ -36,7 +36,10 @@ export class DocWorkflowService {
    * Index a document in all stores (index DB, FTS, vector).
    */
   async indexAndEmbed(kb: string, docId: string, frontmatter: DocFrontmatter, body: string, filename: string): Promise<void> {
-    const links = this.parser.extractLinks(body)
+    // Read back from disk to get the canonical form (after serialization round-trip)
+    const onDisk = this.storage.readDoc(kb, filename)
+    const canonicalBody = onDisk.body
+    const links = this.parser.extractLinks(canonicalBody)
 
     await this.index.upsertDoc(kb, {
       id: docId,
@@ -44,7 +47,7 @@ export class DocWorkflowService {
       category: frontmatter.category,
       tags: frontmatter.tags,
       filePath: filename,
-      contentHash: contentHash(body),
+      contentHash: contentHash(canonicalBody),
     })
 
     await this.index.upsertLinks(
@@ -53,10 +56,10 @@ export class DocWorkflowService {
       links.map((l) => ({ toId: toDocId(l.target), linkText: l.text })),
     )
 
-    this.fts.upsert(kb, docId, frontmatter.title, frontmatter.tags || [], body)
+    this.fts.upsert(kb, docId, frontmatter.title, frontmatter.tags || [], canonicalBody)
 
     this.vector.ensureTables(kb)
-    const vec = await this.embedding.embed(body)
+    const vec = await this.embedding.embed(canonicalBody || frontmatter.title)
     this.vector.upsertVec(kb, docId, vec)
   }
 

@@ -211,12 +211,12 @@ POST /api/schema?kb=<name>
 
 **CLI:**
 ```bash
-kb lint
+kb lint --fix
 ```
 
 **API:**
 ```
-GET /api/lint?kb=<name>
+POST /api/lint/fix?kb=<name>
 ```
 
 Should report no broken links or drift.
