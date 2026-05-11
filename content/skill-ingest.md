@@ -141,3 +141,16 @@ Should report no broken links or drift.
 - **Links**: add `[Display Text](./filename.md)` for every related concept
 - **One concept per page**: don't cram multiple topics into one doc
 - **Decompose aggressively**: a 3-page article should produce 3-8 wiki pages, not 1
+
+## Writing wiki content (not copying source text)
+
+**Never paste source text verbatim.** Wiki pages are synthesized, structured knowledge — not copies.
+
+- **Distill**: extract the key information, discard filler and redundancy
+- **Structure**: use headings, bullet points, short paragraphs. Make it scannable.
+- **Contextualize**: explain how this relates to other knowledge in the KB (use links)
+- **Be factual**: state claims clearly. If something is uncertain, say so.
+- **Attribute when relevant**: "According to [source], ..." — but don't over-cite
+- **Keep it current**: write as if the page will be read months later. Avoid "recently" or "last week" — use dates.
+- **Front-load**: put the most important information first. Details and nuance below.
+
