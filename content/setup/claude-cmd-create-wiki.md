@@ -7,19 +7,23 @@ Then execute:
 
 ```bash
 kb wiki create <name>
-kb wiki use <name>
+```
+
+Ask the user: "Set this wiki as default globally, or just for this project directory?"
+
+- If **globally**: `kb wiki use <name>`
+- If **this project**: create/update `kb.config.json` in the current directory with `{ "wiki": "<name>" }`
+
+Then generate the schema:
+
+```bash
 kb schema update --wiki <name>
 ```
 
-After creating, edit the schema's Custom section with the user's conventions:
-
-```bash
-kb schema --wiki <name>
-```
-
-Read the schema, then update it by editing `~/.kb/<name>/schema.md` to add the user's domain description and conventions to the `## Custom` section.
+Read the generated schema and update `~/.kb/<name>/schema.md` to add the user's domain description and conventions to the `## Custom` section.
 
 Finally, confirm to the user:
-- Wiki "<name>" created and set as default
+- Wiki "<name>" created
+- Set as default (globally / for this project)
 - Schema initialized with their conventions
 - Ready to ingest knowledge via `kb add` or `/kb:ingest`
