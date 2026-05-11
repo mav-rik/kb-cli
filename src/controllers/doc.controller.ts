@@ -277,6 +277,18 @@ export class DocController {
 
     return [header, separator, ...rows].join('\n')
   }
+
+  @Cli('categories')
+  @Description('List all categories in use')
+  async categories(
+    @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
+  ): Promise<string> {
+    const kbName = this.config.resolveKb(kb)
+    const docs = await this.index.listDocs(kbName)
+    const cats = [...new Set(docs.map((d) => d.category).filter(Boolean))].sort()
+    if (cats.length === 0) return 'No categories found.'
+    return cats.join('\n')
+  }
 }
 
 function readStdin(): Promise<string> {

@@ -95,6 +95,7 @@ aimem update <id> [--title "..."] [--category "..."] [--tags "..."] [--content "
 aimem delete <id>
 aimem rename <old-id> <new-id>
 aimem list [--category <cat>] [--tag <tag>] [--format json]
+aimem categories                     # list all categories currently in use
 ```
 
 ### Reading
@@ -139,7 +140,7 @@ Categories are **free-form strings** — create whatever makes sense for the kno
 | Research | `papers`, `methods`, `datasets`, `findings`, `hypotheses` |
 | Mixed | `notes`, `plans`, `ideas`, `logs`, `references` |
 
-The agent should **discover existing categories** before inventing new ones — run `aimem list` to see what's already in use.
+The agent should **discover existing categories** before inventing new ones — run `aimem categories` to see what's already in use.
 
 ## Best practices
 
