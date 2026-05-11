@@ -50,7 +50,7 @@ export class DocController {
     @Description('Read from stdin') @CliOption('stdin') stdin: boolean,
     @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
   ): Promise<string> {
-    const kbName = kb || this.config.get('defaultKb')
+    const kbName = this.config.resolveKb(kb)
     const id = slugify(title)
     const filename = `${id}.md`
 
@@ -121,7 +121,7 @@ export class DocController {
     @Description('Append content') @CliOption('append') @Optional() append: string,
     @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
   ): Promise<string> {
-    const kbName = kb || this.config.get('defaultKb')
+    const kbName = this.config.resolveKb(kb)
     const filename = toFilename(id)
     const docId = toDocId(filename)
 
@@ -158,7 +158,7 @@ export class DocController {
     @Param('id') id: string,
     @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
   ): Promise<string> {
-    const kbName = kb || this.config.get('defaultKb')
+    const kbName = this.config.resolveKb(kb)
     const filename = toFilename(id)
     const docId = toDocId(filename)
 
@@ -192,7 +192,7 @@ export class DocController {
     @Param('newId') newId: string,
     @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
   ): Promise<string> {
-    const kbName = kb || this.config.get('defaultKb')
+    const kbName = this.config.resolveKb(kb)
     const oldFilename = `${oldId}.md`
     const newFilename = `${newId}.md`
 
@@ -251,7 +251,7 @@ export class DocController {
     @Description('Output format') @CliOption('format') @Optional() format: string,
     @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
   ): Promise<string | object> {
-    const kbName = kb || this.config.get('defaultKb')
+    const kbName = this.config.resolveKb(kb)
 
     const docs = await this.index.listDocs(kbName, { category, tag })
 

@@ -16,7 +16,7 @@ export class SearchController {
     @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
   ): Promise<string | object> {
     const parsedLimit = limit ? parseInt(limit, 10) : 10
-    const resolvedKb = kb || this.config.get('defaultKb')
+    const resolvedKb = this.config.resolveKb(kb)
 
     const results = await this.searchService.search(resolvedKb, query, parsedLimit)
 

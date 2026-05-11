@@ -14,11 +14,17 @@ const DEFAULT_CONFIG: AiMemoryConfig = {
   embeddingModel: 'all-MiniLM-L6-v2',
 }
 
+export interface CwdConfig {
+  kb?: string
+}
+
 export class ConfigService {
   private configPath: string
+  private cwdConfig: CwdConfig | null = null
 
   constructor() {
     this.configPath = path.join(this.getDataDir(), 'config.json')
+    this.cwdConfig = this.loadCwdConfig()
   }
 
   getDataDir(): string {
@@ -30,6 +36,29 @@ export class ConfigService {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true })
     }
+  }
+
+  private loadCwdConfig(): CwdConfig | null {
+    let dir = process.cwd()
+    const root = path.parse(dir).root
+    while (dir !== root) {
+      const configPath = path.join(dir, 'aimem.config.json')
+      if (fs.existsSync(configPath)) {
+        try {
+          return JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+        } catch {
+          return null
+        }
+      }
+      dir = path.dirname(dir)
+    }
+    return null
+  }
+
+  resolveKb(explicit?: string): string {
+    if (explicit) return explicit
+    if (this.cwdConfig?.kb) return this.cwdConfig.kb
+    return this.get('defaultKb')
   }
 
   loadConfig(): AiMemoryConfig {

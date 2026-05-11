@@ -16,7 +16,7 @@ export class ReadController {
     @Description('Follow a link') @CliOption('follow', 'f') @Optional() follow: string,
     @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
   ) {
-    const kbName = kb || this.config.get('defaultKb')
+    const kbName = this.config.resolveKb(kb)
     const targetPath = follow ? follow.replace(/^\.\//, '') : docPath
 
     if (!this.storage.docExists(kbName, targetPath)) {

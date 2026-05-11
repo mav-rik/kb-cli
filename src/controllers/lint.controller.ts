@@ -28,7 +28,7 @@ export class LintController {
     @Description('Auto-fix issues') @CliOption('fix') fix: boolean,
     @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
   ): Promise<string> {
-    const kbName = kb || this.config.get('defaultKb')
+    const kbName = this.config.resolveKb(kb)
     const issues: LintIssue[] = []
 
     const brokenLinks = this.linker.findBrokenLinks(kbName)
@@ -149,7 +149,7 @@ export class LintController {
   async reindex(
     @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
   ): Promise<string> {
-    const kbName = kb || this.config.get('defaultKb')
+    const kbName = this.config.resolveKb(kb)
     const startTime = Date.now()
 
     await this.index.dropAll(kbName)
@@ -205,7 +205,7 @@ export class LintController {
   async toc(
     @Description('Knowledge base') @CliOption('kb') @Optional() kb: string,
   ): Promise<string> {
-    const kbName = kb || this.config.get('defaultKb')
+    const kbName = this.config.resolveKb(kb)
 
     const docs = await this.index.listDocs(kbName)
 
