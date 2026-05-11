@@ -18,12 +18,6 @@
       "sourceType": "github",
       "skillPath": "skills/moostjs/SKILL.md",
       "computedHash": "9e022e59813c7027ce50f88e78f4e299a60ebea5fcce2fc5137a675d91c5dd61"
-    },
-    "kb": {
-      "source": "local",
-      "sourceType": "local",
-      "skillPath": "skills/kb/SKILL.md",
-      "computedHash": "3c3e3c08b3153e2a723e1fca63de1d795c8c95202277f44ebf061f1db7ecda33"
     }
   }
 }
