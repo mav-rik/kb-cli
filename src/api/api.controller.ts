@@ -23,6 +23,46 @@ export class ApiController {
   private get activityLog() { return services.activityLog }
   private get schema() { return services.schema }
 
+  // ─── Discovery ────────────────────────────────────────────────────────────
+
+  @Get('')
+  root() {
+    return {
+      name: 'kb',
+      version: '0.1.0',
+      endpoints: [
+        'GET  /api/search?q=&wiki=&limit=&mode=fts|vec|hybrid',
+        'GET  /api/read/:id?wiki=&lines=&format=json',
+        'POST /api/docs  { title, category, tags[], content|body|text, wiki? }',
+        'PUT  /api/docs/:id  { title?, category?, tags?, content?, append?, wiki? }',
+        'DELETE /api/docs/:id?wiki=',
+        'GET  /api/docs?wiki=&category=&tag=',
+        'GET  /api/list?wiki=&category=&tag=',
+        'GET  /api/docs/:id/related?wiki=&limit=',
+        'POST /api/docs/:id/rename  { newId|to, wiki? }',
+        'GET  /api/categories?wiki=',
+        'GET  /api/lint?wiki=',
+        'POST /api/lint/fix?wiki=',
+        'POST /api/reindex?wiki=',
+        'GET  /api/toc?wiki=',
+        'GET  /api/schema?wiki=',
+        'POST /api/schema?wiki=',
+        'GET  /api/log?wiki=&limit=',
+        'GET  /api/wiki',
+        'POST /api/wiki  { name }',
+        'PUT  /api/wiki/use/:name',
+        'DELETE /api/wiki/:name',
+        'GET  /api/skill?workflow=',
+        'GET  /api/health',
+      ],
+    }
+  }
+
+  @Get('health')
+  health() {
+    return { status: 'ok' }
+  }
+
   // ─── Search ───────────────────────────────────────────────────────────────
 
   @Get('search')
@@ -58,7 +98,7 @@ export class ApiController {
 
   @Post('docs')
   @SetStatus(201)
-  async addDoc(@Body() body: { title: string; category: string; tags?: string[]; content: string; wiki?: string }) {
+  async addDoc(@Body() body: { title: string; category: string; tags?: string[]; content?: string; body?: string; text?: string; wiki?: string }) {
     const wikiName = this.config.resolveWiki(body.wiki)
     const id = slugify(body.title)
     const filename = `${id}.md`
@@ -66,6 +106,8 @@ export class ApiController {
     if (this.storage.docExists(wikiName, filename)) {
       return { error: `Document "${filename}" already exists in wiki "${wikiName}".` }
     }
+
+    const docContent = body.content || body.body || body.text || ''
 
     const frontmatter: DocFrontmatter = {
       id,
@@ -76,14 +118,14 @@ export class ApiController {
       updated: today(),
     }
 
-    this.storage.writeDoc(wikiName, filename, frontmatter, body.content || '')
-    await this.workflow.indexAndEmbed(wikiName, id, frontmatter, body.content || '', filename)
+    this.storage.writeDoc(wikiName, filename, frontmatter, docContent)
+    await this.workflow.indexAndEmbed(wikiName, id, frontmatter, docContent, filename)
 
     return { id, filename }
   }
 
   @Put('docs/:id')
-  async updateDoc(@Param('id') id: string, @Body() body: { title?: string; category?: string; tags?: string[]; content?: string; append?: string; wiki?: string }) {
+  async updateDoc(@Param('id') id: string, @Body() body: { title?: string; category?: string; tags?: string[]; content?: string; body?: string; text?: string; append?: string; wiki?: string }) {
     const wikiName = this.config.resolveWiki(body.wiki)
     const filename = toFilename(id)
     const docId = toDocId(filename)
@@ -102,9 +144,10 @@ export class ApiController {
       updated: today(),
     }
 
+    const newContent = body.content ?? body.body ?? body.text
     let docBody = doc.body
-    if (body.content !== undefined) {
-      docBody = body.content
+    if (newContent !== undefined) {
+      docBody = newContent
     } else if (body.append !== undefined) {
       docBody = docBody + body.append
     }
@@ -154,10 +197,13 @@ export class ApiController {
   }
 
   @Post('docs/:id/rename')
-  async renameDoc(@Param('id') id: string, @Body() body: { newId: string; wiki?: string }) {
+  async renameDoc(@Param('id') id: string, @Body() body: { newId?: string; to?: string; name?: string; wiki?: string }) {
     const wikiName = this.config.resolveWiki(body.wiki)
     const oldFilename = toFilename(id)
-    const newId = body.newId
+    const newId = body.newId || body.to || body.name
+    if (!newId) {
+      return { error: 'Missing "newId" (or "to") in request body.' }
+    }
     const newFilename = toFilename(newId)
 
     if (!this.storage.docExists(wikiName, oldFilename)) {
