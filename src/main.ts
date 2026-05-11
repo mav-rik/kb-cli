@@ -5,6 +5,8 @@ import { ReadController } from './controllers/read.controller.js'
 import { DocController } from './controllers/doc.controller.js'
 import { SearchController } from './controllers/search.controller.js'
 import { LintController } from './controllers/lint.controller.js'
+import { SkillController } from './controllers/skill.controller.js'
+import { SetupController } from './controllers/setup.controller.js'
 
 @Controller()
 class AppController {
@@ -16,7 +18,7 @@ class AppController {
 }
 
 new CliApp()
-  .controllers(AppController, KbController, ConfigController, ReadController, DocController, SearchController, LintController)
+  .controllers(AppController, KbController, ConfigController, ReadController, DocController, SearchController, LintController, SkillController, SetupController)
   .useHelp({ name: 'aimem', title: 'AI Memory - Knowledge base CLI for AI agents' })
   .useOptions([{ keys: ['help'], description: 'Display instructions.' }])
   .start()
