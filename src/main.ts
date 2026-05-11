@@ -10,6 +10,41 @@ import { SetupController } from './controllers/setup.controller.js'
 
 @Controller()
 class AppController {
+  @Cli('')
+  @Description('Show help')
+  root() {
+    const lines = [
+      'AI Memory - Knowledge base CLI for AI agents',
+      '',
+      'Usage: aimem <command> [options]',
+      '',
+      'Commands:',
+      '  search <query>     Search documents (hybrid semantic + keyword)',
+      '  read <file>        Read a document (--lines, --meta, --links, --follow)',
+      '  add                Add a new document',
+      '  update <id>        Update a document',
+      '  delete <id>        Delete a document',
+      '  rename <old> <new> Rename and update links',
+      '  list               List documents (--category, --tag)',
+      '  categories         List categories in use',
+      '  related <id>       Find related documents',
+      '  lint               Check KB integrity (--fix)',
+      '  reindex            Rebuild index from files',
+      '  toc                Show table of contents',
+      '  kb <cmd>           Manage knowledge bases (create/list/info/delete)',
+      '  config <cmd>       Manage configuration (get/set/list)',
+      '  skill [workflow]   Show agent instructions',
+      '  setup              Install agent integrations',
+      '  version            Show version',
+      '',
+      'Global options:',
+      '  --kb <name>        Target knowledge base (default: from aimem.config.json or "default")',
+      '  --format json      Machine-readable output',
+      '  --help             Show help for a command',
+    ]
+    return lines.join('\n')
+  }
+
   @Cli('version')
   @Description('Show version')
   version() {
