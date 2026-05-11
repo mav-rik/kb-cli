@@ -20,7 +20,7 @@ export class DocController {
     @Description('Document title') @CliOption('title', 't') title: string,
     @Description('Category') @CliOption('category', 'c') category: string,
     @Description('Tags (comma-separated)') @CliOption('tags') @Optional() tags: string,
-    @Description('Content') @CliOption('content') @Optional() content: string,
+    @Description('Content') @CliOption('content', 'body') @Optional() content: string,
     @Description('File to ingest') @CliOption('file') @Optional() file: string,
     @Description('Read from stdin') @CliOption('stdin') stdin: boolean,
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
