@@ -56,7 +56,7 @@ class AppController {
   @Cli('version')
   @Description('Show version')
   version() {
-    return '0.1.3'
+    return '0.1.4'
   }
 
   @Cli('serve')

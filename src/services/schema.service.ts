@@ -93,13 +93,19 @@ export class SchemaService {
     lines.push(`- Frontmatter: id, title, category, tags, created, updated`)
     lines.push(`- One concept per document, 50-200 lines target`)
     lines.push('')
-    lines.push(`## Document Index`)
+    const SAMPLE_DOCS_PER_CATEGORY = 5
+    lines.push(`## Sample Documents`)
+    lines.push('')
+    lines.push(`Up to ${SAMPLE_DOCS_PER_CATEGORY} per category — for shape and naming conventions only. Run \`kb list --category <name>\` for the full listing.`)
     lines.push('')
     for (const [cat] of sortedCats) {
       const catDocs = docs.filter(d => d.category === cat).sort((a, b) => a.title.localeCompare(b.title))
       lines.push(`### ${cat}`)
-      for (const doc of catDocs) {
+      for (const doc of catDocs.slice(0, SAMPLE_DOCS_PER_CATEGORY)) {
         lines.push(`- [${doc.title}](./docs/${doc.id}.md)`)
+      }
+      if (catDocs.length > SAMPLE_DOCS_PER_CATEGORY) {
+        lines.push(`- _…and ${catDocs.length - SAMPLE_DOCS_PER_CATEGORY} more_`)
       }
       lines.push('')
     }
