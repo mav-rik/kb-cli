@@ -1,5 +1,9 @@
 # kb
 
+<p align="center">
+  <img src="./logo.svg" alt="kb logo" width="180">
+</p>
+
 Local-first wiki CLI for AI agents. Persistent, searchable knowledge bases built from Markdown files with hybrid semantic + keyword search.
 
 Inspired by [Karpathy's LLM-wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) — the LLM incrementally builds and maintains a structured wiki that compounds over time.
