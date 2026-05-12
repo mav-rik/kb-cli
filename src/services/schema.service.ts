@@ -61,7 +61,7 @@ export class SchemaService {
     const lines: string[] = []
     lines.push(`# Schema: ${kb}`)
     lines.push('')
-    lines.push(`> Auto-generated sections are rebuilt by \`aimem schema update\`.`)
+    lines.push(`> Auto-generated sections are rebuilt by \`kb schema update\`.`)
     lines.push(`> The "Custom" section at the bottom is preserved across updates — edit it freely.`)
     lines.push('')
     lines.push(`## Stats`)

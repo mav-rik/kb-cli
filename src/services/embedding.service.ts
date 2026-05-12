@@ -1,11 +1,12 @@
 import { pipeline, env } from '@huggingface/transformers'
 import * as path from 'node:path'
-import * as os from 'node:os'
+import { ConfigService } from './config.service.js'
 
 export class EmbeddingService {
   private pipe: any = null
   private modelName = 'Xenova/all-MiniLM-L6-v2'
   private initPromise: Promise<void> | null = null
+  constructor(private config: ConfigService) {}
 
   /**
    * Lazy-load the model on first use.
@@ -20,7 +21,7 @@ export class EmbeddingService {
   }
 
   private async _loadModel(): Promise<void> {
-    env.cacheDir = path.join(os.homedir(), '.ai-memory', '.models')
+    env.cacheDir = path.join(this.config.getDataDir(), '.models')
 
     process.stderr.write('Loading embedding model...\n')
     this.pipe = await pipeline('feature-extraction', this.modelName, {

@@ -24,6 +24,7 @@ export class ConfigService {
   private remoteConfig: RemoteConfigService
 
   constructor() {
+    this.migrateLegacyDataDir()
     this.configPath = path.join(this.getDataDir(), 'config.json')
     this.cwdConfig = this.loadCwdConfig()
     this.remoteConfig = new RemoteConfigService(this.getDataDir())
@@ -31,6 +32,71 @@ export class ConfigService {
 
   getDataDir(): string {
     return path.join(os.homedir(), '.kb')
+  }
+
+  private getLegacyDataDir(): string {
+    return path.join(os.homedir(), '.ai-memory')
+  }
+
+  private migrateLegacyDataDir(): void {
+    const legacy = this.getLegacyDataDir()
+    const target = this.getDataDir()
+    if (!fs.existsSync(legacy)) return
+
+    let entries: fs.Dirent[]
+    try {
+      entries = fs.readdirSync(legacy, { withFileTypes: true })
+    } catch {
+      return
+    }
+
+    const candidates = entries
+      .map((entry) => ({ entry, src: path.join(legacy, entry.name) }))
+      .filter(({ entry, src }) => this.isKbArtifact(entry, src))
+
+    if (candidates.length === 0) {
+      this.cleanupEmptyDir(legacy)
+      return
+    }
+
+    this.ensureDataDir()
+    let migrated = 0
+    for (const { entry, src } of candidates) {
+      const dst = path.join(target, entry.name)
+      if (fs.existsSync(dst)) continue // don't overwrite — the .kb copy wins
+      try {
+        fs.renameSync(src, dst)
+        migrated++
+      } catch (err) {
+        process.stderr.write(
+          `kb: failed to migrate ${src} → ${dst}: ${(err as Error).message}\n`,
+        )
+      }
+    }
+
+    if (migrated > 0) {
+      process.stderr.write(
+        `kb: migrated ${migrated} legacy artifact(s) from ${legacy} → ${target}\n`,
+      )
+    }
+
+    this.cleanupEmptyDir(legacy)
+  }
+
+  private cleanupEmptyDir(dir: string): void {
+    try {
+      if (fs.readdirSync(dir).length === 0) fs.rmdirSync(dir)
+    } catch {}
+  }
+
+  private isKbArtifact(entry: fs.Dirent, fullPath: string): boolean {
+    if (!entry.isDirectory()) {
+      return entry.name === 'config.json' || entry.name === 'remotes.json'
+    }
+    if (entry.name === '.models') return true
+    if (fs.existsSync(path.join(fullPath, 'index.db'))) return true
+    if (fs.existsSync(path.join(fullPath, 'docs'))) return true
+    return false
   }
 
   private ensureDataDir(): void {

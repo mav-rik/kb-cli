@@ -1,5 +1,5 @@
 ---
-description: "ai-memory knowledge base integration"
+description: "kb knowledge base integration"
 globs: "**/*"
 alwaysApply: true
 ---

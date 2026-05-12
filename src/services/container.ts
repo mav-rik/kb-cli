@@ -20,7 +20,7 @@ class ServiceContainer {
   readonly storage: StorageService
   readonly index: IndexService
   readonly linker: LinkerService
-  readonly embedding = new EmbeddingService()
+  readonly embedding: EmbeddingService
   readonly vector: VectorService
   readonly fts: FtsService
   readonly search: SearchService
@@ -35,6 +35,7 @@ class ServiceContainer {
     this.index = new IndexService(this.config)
     this.vector = new VectorService(this.config)
     this.fts = new FtsService(this.config)
+    this.embedding = new EmbeddingService(this.config)
     this.storage = new StorageService(this.config, this.parser)
     this.linker = new LinkerService(this.storage, this.parser, this.index)
     this.search = new SearchService(this.embedding, this.vector, this.fts, this.index, this.storage)

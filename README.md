@@ -67,7 +67,7 @@ Any `kb` command run within this directory (or subdirectories) will use that wik
 | Agent | What gets installed |
 |-------|-------------------|
 | Claude Code | `.claude/skills/` + `.claude/commands/` |
-| Cursor | `.cursor/rules/aimem.mdc` |
+| Cursor | `.cursor/rules/kb.mdc` |
 | Codex CLI | `AGENTS.md` section |
 | Cline | `.clinerules` append |
 | Windsurf | `.windsurfrules` append |
