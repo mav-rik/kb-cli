@@ -20,9 +20,9 @@ Inspired by [Karpathy's LLM-wiki pattern](https://gist.github.com/karpathy/442a6
 ## Install
 
 ```bash
-pnpm add -g kb-cli
+pnpm add -g kb-wiki
 # or
-npm install -g kb-cli
+npm install -g kb-wiki
 ```
 
 First run downloads the embedding model (~90MB, cached in `~/.kb/.models/`).
