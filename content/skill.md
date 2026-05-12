@@ -58,7 +58,7 @@ Once attached, remote wikis work identically to local ones — all commands (sea
 1. **Search before adding** — avoid duplicates
 2. **Cross-link aggressively** — use `[text](./other-doc.md)` format
 3. **After every mutation, check related docs** — fix contradictions/outdated info
-4. **One concept per doc, 50-200 lines** — atomic, searchable units
+4. **One concept per doc, 50-500 lines** — atomic, searchable units
 5. **Categories are free-form** — run `kb categories` to discover existing ones
 6. **Update schema after changes** — `kb schema update`
 

@@ -169,7 +169,7 @@ Should report no broken links or drift.
 - **Title**: specific and descriptive ("React Query Caching Strategy" not "Notes")
 - **Category**: check `kb categories` and `kb schema` first; reuse existing
 - **Tags**: 2-5 short keywords for discoverability
-- **Size**: target 50-200 lines per doc; split if larger
+- **Size**: target 50-500 lines per doc; split if larger
 - **Links**: add `[Display Text](./filename.md)` for every related concept
 - **One concept per page**: don't cram multiple topics into one doc
 - **Decompose aggressively**: a 3-page article should produce 3-8 wiki pages, not 1

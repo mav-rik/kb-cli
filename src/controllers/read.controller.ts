@@ -2,12 +2,13 @@ import { Controller, Cli, Param, CliOption, Description, Optional } from '@moost
 import { services } from '../services/container.js'
 import { toFilename, parseLineRange } from '../utils/slug.js'
 
-@Controller('read')
+@Controller()
 export class ReadController {
   private get config() { return services.config }
   private get gateway() { return services.gateway }
 
-  @Cli(':path')
+  @Cli('read/:path')
+  @Cli('get/:path')
   @Description('Read a document')
   async read(
     @Param('path') docPath: string,
