@@ -3,11 +3,11 @@ import { ParserService } from './parser.service.js'
 import { IndexService } from './index.service.js'
 import { LinkerService } from './linker.service.js'
 import { EmbeddingService } from './embedding.service.js'
-import { VectorService } from './vector.service.js'
 import { FtsService } from './fts.service.js'
 import { StorageService } from './storage.service.js'
 import { toDocId } from '../utils/slug.js'
 import { contentHash } from '../utils/hash.js'
+import { chunk } from '../utils/chunk.js'
 
 export interface LintIssue {
   type: 'broken' | 'orphan' | 'missing' | 'drift'
@@ -27,7 +27,6 @@ export class DocWorkflowService {
     private index: IndexService,
     private linker: LinkerService,
     private embedding: EmbeddingService,
-    private vector: VectorService,
     private fts: FtsService,
     private storage: StorageService,
   ) {}
@@ -58,18 +57,17 @@ export class DocWorkflowService {
 
     this.fts.upsert(kb, docId, frontmatter.title, frontmatter.tags || [], canonicalBody)
 
-    this.vector.ensureTables(kb)
     const vec = await this.embedding.embed(canonicalBody || frontmatter.title)
-    this.vector.upsertVec(kb, docId, vec)
+    await this.index.setEmbedding(kb, docId, vec)
   }
 
   /**
    * Remove a document from all index stores.
+   * The `__ad` AFTER DELETE trigger on `documents` clears the vec0 shadow
+   * automatically when IndexService.deleteDoc runs.
    */
   async removeFromIndex(kb: string, docId: string): Promise<void> {
     await this.index.deleteDoc(kb, docId)
-    this.vector.ensureTables(kb)
-    this.vector.deleteVec(kb, docId)
     this.fts.delete(kb, docId)
   }
 
@@ -177,47 +175,60 @@ export class DocWorkflowService {
 
   /**
    * Full reindex: drop all index data and rebuild from files.
-   * The optional onProgress callback is called with (current, total) for each file.
+   * Embeddings are computed in batches of 25 via `embedBatch` — much
+   * cheaper than per-doc `embed()` on multi-doc wikis. The optional
+   * `onProgress` callback fires once per doc (after batch embedding,
+   * during the per-doc DB write loop) so progress UI stays smooth.
    */
   async reindex(kb: string, onProgress?: (current: number, total: number) => void): Promise<ReindexResult> {
     const startTime = Date.now()
+    const BATCH = 25
 
+    // index.dropAll empties the documents table; the AFTER DELETE trigger
+    // on the vec0 shadow keeps the vector index in lockstep automatically.
     await this.index.dropAll(kb)
-    this.vector.ensureTables(kb)
-    this.vector.dropAll(kb)
     this.fts.dropAll(kb)
 
     const files = this.storage.listFiles(kb)
 
-    for (let i = 0; i < files.length; i++) {
-      if (onProgress) onProgress(i + 1, files.length)
-
-      const file = files[i]
+    // Read & parse all docs up front. This is cheap (sync fs) compared to
+    // the per-doc DB + embedding work that follows.
+    const parsed = files.map((file) => {
       const doc = this.storage.readDoc(kb, file)
-      const docId = toDocId(file)
-      const hash = contentHash(doc.body)
+      return { file, docId: toDocId(file), doc, hash: contentHash(doc.body) }
+    })
 
-      await this.index.upsertDoc(kb, {
-        id: docId,
-        title: doc.frontmatter.title,
-        category: doc.frontmatter.category,
-        tags: doc.frontmatter.tags,
-        filePath: file,
-        contentHash: hash,
-      })
+    let processed = 0
+    for (const batch of chunk(parsed, BATCH)) {
+      const texts = batch.map((p) => p.doc.body || p.doc.frontmatter.title)
+      const vectors = await this.embedding.embedBatch(texts)
 
-      if (doc.links.length > 0) {
-        await this.index.upsertLinks(
-          kb,
-          docId,
-          doc.links.map((l) => ({ toId: toDocId(l.target), linkText: l.text })),
-        )
+      for (let j = 0; j < batch.length; j++) {
+        const p = batch[j]
+        const vec = vectors[j]
+        await this.index.upsertDoc(kb, {
+          id: p.docId,
+          title: p.doc.frontmatter.title,
+          category: p.doc.frontmatter.category,
+          tags: p.doc.frontmatter.tags,
+          filePath: p.file,
+          contentHash: p.hash,
+        })
+
+        if (p.doc.links.length > 0) {
+          await this.index.upsertLinks(
+            kb,
+            p.docId,
+            p.doc.links.map((l) => ({ toId: toDocId(l.target), linkText: l.text })),
+          )
+        }
+
+        this.fts.upsert(kb, p.docId, p.doc.frontmatter.title, p.doc.frontmatter.tags || [], p.doc.body || '')
+        await this.index.setEmbedding(kb, p.docId, vec)
+
+        processed++
+        if (onProgress) onProgress(processed, parsed.length)
       }
-
-      this.fts.upsert(kb, docId, doc.frontmatter.title, doc.frontmatter.tags || [], doc.body || '')
-
-      const embedding = await this.embedding.embed(doc.body || doc.frontmatter.title)
-      this.vector.upsertVec(kb, docId, embedding)
     }
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
@@ -267,7 +278,7 @@ export class DocWorkflowService {
     const queryText = `${parsed.frontmatter.title} ${parsed.body}`.slice(0, 500)
     const queryVec = await this.embedding.embed(queryText)
 
-    const vecResults = this.vector.searchVec(kb, queryVec, limit + 1)
+    const vecResults = await this.index.semanticSearch(kb, queryVec, limit + 1)
     const filtered = vecResults.filter((r) => r.id !== docId).slice(0, limit)
 
     return filtered.map(({ id: relId, distance }) => [relId, 1 / (1 + distance)])

@@ -1,5 +1,4 @@
 import { EmbeddingService } from './embedding.service.js'
-import { VectorService } from './vector.service.js'
 import { FtsService } from './fts.service.js'
 import { IndexService } from './index.service.js'
 import { StorageService } from './storage.service.js'
@@ -18,7 +17,6 @@ export interface SearchResult {
 export class SearchService {
   constructor(
     private embedding: EmbeddingService,
-    private vector: VectorService,
     private fts: FtsService,
     private index: IndexService,
     private storage: StorageService,
@@ -38,7 +36,7 @@ export class SearchService {
 
     if (mode === 'vec' || mode === 'hybrid') {
       const queryVec = await this.embedding.embed(query)
-      const semanticResults = this.vector.searchVec(kb, queryVec, limit * 2)
+      const semanticResults = await this.index.semanticSearch(kb, queryVec, limit * 2)
       for (let i = 0; i < semanticResults.length; i++) {
         const id = semanticResults[i].id
         scores.set(id, (scores.get(id) || 0) + 1 / (k + i + 1))

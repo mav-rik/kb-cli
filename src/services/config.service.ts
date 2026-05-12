@@ -4,14 +4,28 @@ import * as os from 'node:os'
 import type { WikiRef } from '../types/wiki-ref.js'
 import { RemoteConfigService } from './remote-config.service.js'
 
+/**
+ * Current schema version expected by this build of kb-wiki.
+ *
+ * Bump whenever existing user data on disk needs explicit migration
+ * (schema-level changes that schema-sync can't handle, or data backfills
+ * such as re-embedding under a new model / dimension).
+ *
+ * Version history:
+ *   0  — pre-versioned (legacy 384-dim VectorService, no `embedding` column)
+ *   1  — atscript-db native vectors + 768-dim Xenova/bge-base-en-v1.5
+ */
+export const CURRENT_SCHEMA_VERSION = 1
+
 export interface KbCliConfig {
   defaultWiki: string
   embeddingModel: string
+  schemaVersion?: number
 }
 
 const DEFAULT_CONFIG: KbCliConfig = {
   defaultWiki: 'default',
-  embeddingModel: 'all-MiniLM-L6-v2',
+  embeddingModel: 'Xenova/bge-base-en-v1.5',
 }
 
 export interface CwdConfig {
@@ -147,7 +161,20 @@ export class ConfigService {
   loadConfig(): KbCliConfig {
     this.ensureDataDir()
     if (!fs.existsSync(this.configPath)) {
-      return { ...DEFAULT_CONFIG }
+      // Fresh install: if there are no existing wikis on disk, stamp the
+      // current schemaVersion so a brand-new user never trips the
+      // migration gate. If wikis do exist (e.g. someone deleted only the
+      // config), leave schemaVersion off so the gate fires.
+      const fresh: KbCliConfig = { ...DEFAULT_CONFIG }
+      if (!this.hasAnyWiki()) {
+        fresh.schemaVersion = CURRENT_SCHEMA_VERSION
+        try {
+          this.saveConfig(fresh)
+        } catch {
+          // best-effort; the in-memory value is correct either way
+        }
+      }
+      return fresh
     }
     const raw = fs.readFileSync(this.configPath, 'utf-8')
     return { ...DEFAULT_CONFIG, ...JSON.parse(raw) }
@@ -158,14 +185,61 @@ export class ConfigService {
     fs.writeFileSync(this.configPath, JSON.stringify(config, null, 2), 'utf-8')
   }
 
-  get(key: keyof KbCliConfig): string {
+  get(key: 'defaultWiki' | 'embeddingModel'): string {
     const config = this.loadConfig()
-    return config[key]
+    return config[key] as string
   }
 
-  set(key: keyof KbCliConfig, value: string): void {
+  set(key: 'defaultWiki' | 'embeddingModel', value: string): void {
     const config = this.loadConfig()
     config[key] = value
     this.saveConfig(config)
+  }
+
+  /**
+   * Read the schemaVersion stamped in the global config.
+   * Returns 0 for legacy installs where the field is missing.
+   */
+  getSchemaVersion(): number {
+    const config = this.loadConfig()
+    return typeof config.schemaVersion === 'number' ? config.schemaVersion : 0
+  }
+
+  /**
+   * Persist a new schemaVersion (called by MigrationService.run on success).
+   */
+  setSchemaVersion(v: number): void {
+    const config = this.loadConfig()
+    config.schemaVersion = v
+    this.saveConfig(config)
+  }
+
+  /**
+   * Synchronous, cheap check: does the data dir contain any wiki?
+   * A "wiki" is any subdirectory with either `docs/` or `index.db`.
+   */
+  private hasAnyWiki(): boolean {
+    const dataDir = this.getDataDir()
+    if (!fs.existsSync(dataDir)) return false
+
+    let entries: fs.Dirent[]
+    try {
+      entries = fs.readdirSync(dataDir, { withFileTypes: true })
+    } catch {
+      return false
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      if (entry.name.startsWith('.')) continue
+      const sub = path.join(dataDir, entry.name)
+      if (
+        fs.existsSync(path.join(sub, 'docs')) ||
+        fs.existsSync(path.join(sub, 'index.db'))
+      ) {
+        return true
+      }
+    }
+    return false
   }
 }

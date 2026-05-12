@@ -18,11 +18,11 @@ export declare class Document {
   title: string
   category: string
   tags?: string[]
-  content: string
   filePath: string
   contentHash: string
   createdAt?: number /* timestamp */
   updatedAt?: number /* timestamp */
+  embedding?: number[]
   static __is_atscript_annotated_type: true
   static type: TAtscriptTypeObject<keyof Document, Document>
   static metadata: TMetadataMap<AtscriptMetadata>
@@ -36,22 +36,22 @@ export declare class Document {
     "title": string
     "category": string
     "tags"?: string
-    "content": string
     "filePath": string
     "contentHash": string
     "createdAt"?: number /* timestamp */
     "updatedAt"?: number /* timestamp */
+    "embedding"?: number[]
   }
   static __ownProps: {
     "id": string
     "title": string
     "category": string
     "tags"?: string
-    "content": string
     "filePath": string
     "contentHash": string
     "createdAt"?: number /* timestamp */
     "updatedAt"?: number /* timestamp */
+    "embedding"?: number[]
   }
   
   static __pk: string

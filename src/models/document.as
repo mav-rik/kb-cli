@@ -6,6 +6,7 @@ export interface Document {
 
     title: string
 
+    @db.search.filter 'embedding'
     category: string
 
     @db.json
@@ -24,4 +25,7 @@ export interface Document {
     @db.column.renamed 'updated_at'
     @db.default.now
     updatedAt?: number.timestamp
+
+    @db.search.vector 768, 'cosine'
+    embedding?: number[]
 }
