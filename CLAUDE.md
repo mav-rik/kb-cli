@@ -55,7 +55,7 @@ WikiGateway → getOps(ref) → WikiOps interface
 
 ### Models (src/models/)
 
-AtScript `.as` files compiled by unplugin-atscript. TypeScript can't resolve `.as` imports directly — the 3 "Cannot find module" errors from `tsc --noEmit` are expected and harmless (rolldown handles them at build time).
+AtScript `.as` files compiled by `unplugin-atscript` at build time. Type declarations are generated alongside as `<name>.as.d.ts` by `asc -f dts` (or the VSCode extension's on-save hook). TS picks these up correctly under `moduleResolution: "Bundler"` (set in [tsconfig.json](tsconfig.json)) — `NodeNext` would strip the `.as` extension and miss them.
 
 ### Content (content/)
 

@@ -175,7 +175,7 @@ export class IndexService {
       controls: { $limit: limit, $select: { embedding: 0 } },
     })
     return rows.map((row) => {
-      const r = row as { id: string; _distance: number }
+      const r = row as unknown as { id: string; _distance: number }
       return { id: r.id, distance: r._distance }
     })
   }
