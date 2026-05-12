@@ -1,6 +1,6 @@
 # Search Workflow — Retrieving Knowledge
 
-Follow these steps when looking up information from the knowledge base.
+The wiki is a **graph**. Search returns seed pages, not answers. Real understanding comes from reading a seed, following its links, reading those, and continuing until you have enough context. One document is almost never enough.
 
 ## Search modes
 
@@ -30,13 +30,21 @@ kb read <filename> --lines 1-80     # chunked reading
 kb read <filename> --lines 81-160
 ```
 
-## Step 3: Explore related knowledge
+## Step 3: Crawl the link graph
+
+This is the core of retrieval — not an optional step.
+
+From each promising seed page:
 
 ```bash
-kb read <filename> --links          # list outgoing links
-kb read <filename> --follow "./linked-doc.md"
-kb related <id>                     # semantically similar docs
+kb read <filename> --links          # what does this page point to?
+kb read <filename> --follow "./linked-doc.md"   # jump along a link
+kb related <id>                     # semantically nearby docs (may not be linked yet)
 ```
+
+Follow links that look relevant to the question. Read those pages. Look at *their* links. Repeat. Each hop should add new information.
+
+**Stop when reading further pages stops adding new information.** If you find two pages that *should* be linked but aren't, fix it after answering (`kb update <id> --append "See also: [Other](./other.md)"`).
 
 ## Step 4: Browse by category
 
@@ -45,15 +53,17 @@ kb categories
 kb list --category <category>
 ```
 
-## Step 5: Persist valuable answers
+## Step 5: File answers back
 
-If you synthesized a substantial answer by combining information from multiple documents, **save it back** as a new document.
+If you synthesized a substantial answer by combining information from multiple documents, save it as a new document.
 
 ```bash
-kb add --title "How Auth System Works" --category concepts --tags "auth,architecture" --content "<synthesized answer with links>"
+kb add --title "How Auth System Works" --category concepts --tags "auth,architecture" --content "<synthesized answer with links to the pages you read>"
 ```
 
-This only applies when the answer adds value beyond what individual docs already say.
+**This is how the wiki compounds.** Your synthesis becomes a new seed for future queries — the next agent doesn't have to re-derive the same conclusion from raw pages. Link to the docs you drew from so the connections stay traceable.
+
+Only applies when the answer adds value beyond what individual docs already say.
 
 ## Tips
 

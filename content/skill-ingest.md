@@ -1,6 +1,22 @@
 # Ingest Workflow — Storing New Knowledge
 
-Follow these steps when receiving new information to store.
+You are not just writing a document — you are adding a node to a graph that future agents will discover and traverse. Every ingestion decision should be made with that in mind.
+
+## How knowledge gets discovered later
+
+A future agent will find what you write through two mechanisms:
+
+1. **Search** — by query terms and semantic similarity. Titles, headings, and the opening lines of a page weigh heavily in ranking. Pick terms a future searcher would actually use, not internal jargon.
+2. **Crawling** — by following links outward from seed pages. A page with **no incoming links is invisible** until someone happens to search for its exact topic. Cross-references are pre-computed reasoning: when you link page A to page B, you're telling future agents "if you're reading A, B is worth reading too."
+
+So when you ingest:
+
+- **Decompose into atomic, linked pages**, not monoliths. Small notes are easier to discover, cite, and recombine.
+- **Choose titles that match how someone would search**, not how the source phrased it.
+- **After creating a new page, link FROM existing related pages back to it** — otherwise it can't be reached by traversal.
+- **Place the most searchable terms in the title, first heading, and opening sentence.**
+
+Bad ingest = a dead-end page no one will ever reach. Good ingest = a well-placed node in the graph that pulls its weight in future queries.
 
 ## Step 0: Discuss with user
 

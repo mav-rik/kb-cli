@@ -1,6 +1,6 @@
 {
   "name": "kb-wiki",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Knowledge base CLI for AI agents",
   "type": "module",
   "main": "dist/main.js",
