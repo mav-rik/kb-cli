@@ -20,12 +20,23 @@ Inspired by [Karpathy's LLM-wiki pattern](https://gist.github.com/karpathy/442a6
 ## Install
 
 ```bash
-pnpm add -g kb-wiki
-# or
 npm install -g kb-wiki
 ```
 
 First run downloads the embedding model (~90MB, cached in `~/.kb/.models/`).
+
+### Installing with pnpm
+
+pnpm refuses to run install scripts of transitive native dependencies (`better-sqlite3`, `onnxruntime-node`) unless you've approved them. Without that step, `kb` will fail at startup with `Could not locate the bindings file`. Two ways to handle it:
+
+```bash
+# Recommended: approve native builds once, then install.
+pnpm approve-builds -g            # interactive — say yes to better-sqlite3 + onnxruntime-node
+pnpm add -g kb-wiki
+
+# If you already installed and hit the bindings error, force a rebuild:
+pnpm rebuild -g
+```
 
 ## Quick start
 
