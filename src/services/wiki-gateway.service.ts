@@ -11,7 +11,7 @@ export class WikiGatewayService {
 
   getOps(ref: WikiRef): WikiOps {
     if (ref.type === 'remote') {
-      return new RemoteWikiOps(ref.url, ref.name, ref.pat, this.remoteClient)
+      return new RemoteWikiOps(ref.url, ref.name, ref.secret, this.remoteClient)
     }
     return new LocalWikiOps(ref.name, this.localServices)
   }

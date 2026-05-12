@@ -43,7 +43,7 @@ kb wiki use <name>               # set default wiki
 Connect to remote kb servers to use shared team knowledge:
 
 ```bash
-kb remote add <name> --url <url> [--pat <token>]   # register a remote KB
+kb remote add <name> --url <url> [--secret <shared-secret>]   # register a remote KB
 kb remote connect <name>                            # test connection
 kb remote wikis <name>                              # list available wikis
 kb remote attach <kb> <wiki> [--alias <local-name>] # attach for local use

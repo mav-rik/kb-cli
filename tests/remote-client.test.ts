@@ -75,16 +75,16 @@ describe('RemoteClient', () => {
     expect(body).toEqual({ title: 'Test', category: 'notes', tags: ['a'], content: 'body', wiki: 'mywiki' })
   })
 
-  it('sets Authorization header when pat provided', async () => {
+  it('sets Authorization header when secret provided', async () => {
     mockFetch.mockResolvedValue(jsonResponse({ status: 'ok' }))
 
-    await client.health('http://localhost:3000', 'my-token')
+    await client.health('http://localhost:3000', 'my-secret')
 
     const [, opts] = mockFetch.mock.calls[0]
-    expect(opts.headers['Authorization']).toBe('Bearer my-token')
+    expect(opts.headers['Authorization']).toBe('Bearer my-secret')
   })
 
-  it('omits Authorization header when no pat', async () => {
+  it('omits Authorization header when no secret', async () => {
     mockFetch.mockResolvedValue(jsonResponse({ status: 'ok' }))
 
     await client.health('http://localhost:3000')
@@ -127,12 +127,12 @@ describe('RemoteClient', () => {
   it('logAdd sends POST /api/log with op, doc, details', async () => {
     mockFetch.mockResolvedValue(jsonResponse({ logged: true }))
 
-    await client.logAdd('http://localhost:3000', 'mywiki', 'ingest', 'my-doc', 'added new info', 'token')
+    await client.logAdd('http://localhost:3000', 'mywiki', 'ingest', 'my-doc', 'added new info', 'my-secret')
 
     const [url, opts] = mockFetch.mock.calls[0]
     expect(url).toBe('http://localhost:3000/api/log')
     expect(opts.method).toBe('POST')
-    expect(opts.headers['Authorization']).toBe('Bearer token')
+    expect(opts.headers['Authorization']).toBe('Bearer my-secret')
     const body = JSON.parse(opts.body)
     expect(body).toEqual({ wiki: 'mywiki', op: 'ingest', doc: 'my-doc', details: 'added new info' })
   })
@@ -149,7 +149,7 @@ describe('RemoteClient', () => {
   it('log fetches GET /api/log with wiki and limit', async () => {
     mockFetch.mockResolvedValue(jsonResponse([{ timestamp: '2025-01-01', operation: 'add', docId: 'x' }]))
 
-    const result = await client.log('http://localhost:3000', 'mywiki', 5, 'tok')
+    const result = await client.log('http://localhost:3000', 'mywiki', 5, 'my-secret')
 
     const url = mockFetch.mock.calls[0][0] as string
     expect(url).toContain('/api/log?')

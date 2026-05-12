@@ -30,10 +30,10 @@ describe('RemoteConfigService', () => {
     expect(remote!.attachedWikis).toEqual({})
   })
 
-  it('addRemote stores PAT', () => {
+  it('addRemote stores secret', () => {
     service.addRemote('origin', 'http://localhost:3000', 'secret-token')
     const remote = service.getRemote('origin')
-    expect(remote!.pat).toBe('secret-token')
+    expect(remote!.secret).toBe('secret-token')
   })
 
   it('removeRemote removes a remote', () => {
@@ -116,7 +116,7 @@ describe('RemoteConfigService', () => {
       remoteName: 'origin',
       wikiName: 'my-wiki',
       url: 'http://localhost:3000',
-      pat: 'tok',
+      secret: 'tok',
     })
   })
 

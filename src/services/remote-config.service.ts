@@ -7,7 +7,7 @@ export interface AttachedWiki {
 
 export interface RemoteKbEntry {
   url: string
-  pat?: string
+  secret?: string
   attachedWikis: Record<string, AttachedWiki>
 }
 
@@ -40,9 +40,9 @@ export class RemoteConfigService {
     this.cached = config
   }
 
-  addRemote(name: string, url: string, pat?: string): void {
+  addRemote(name: string, url: string, secret?: string): void {
     const config = this.load()
-    config.remotes[name] = { url, pat, attachedWikis: {} }
+    config.remotes[name] = { url, secret, attachedWikis: {} }
     this.save(config)
   }
 
@@ -101,13 +101,13 @@ export class RemoteConfigService {
     return { error: `No attached wiki found with name "${localName}".` }
   }
 
-  resolveRemoteWiki(localName: string): { remoteName: string; wikiName: string; url: string; pat?: string } | null {
+  resolveRemoteWiki(localName: string): { remoteName: string; wikiName: string; url: string; secret?: string } | null {
     const config = this.load()
     for (const [remoteName, remote] of Object.entries(config.remotes)) {
       for (const [wikiName, entry] of Object.entries(remote.attachedWikis)) {
         const effectiveName = entry.alias || wikiName
         if (effectiveName === localName) {
-          return { remoteName, wikiName, url: remote.url, pat: remote.pat }
+          return { remoteName, wikiName, url: remote.url, secret: remote.secret }
         }
       }
     }

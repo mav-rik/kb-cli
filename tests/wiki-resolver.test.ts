@@ -40,7 +40,7 @@ describe('wiki-resolver', () => {
         remotes: {
           myserver: {
             url: 'http://remote:3000',
-            pat: 'token123',
+            secret: 'token123',
             attachedWikis: { docs: { alias: null } },
           },
         },
@@ -56,7 +56,7 @@ describe('wiki-resolver', () => {
       localAlias: 'docs',
       remoteKb: 'myserver',
       url: 'http://remote:3000',
-      pat: 'token123',
+      secret: 'token123',
     })
   })
 
@@ -82,7 +82,7 @@ describe('wiki-resolver', () => {
       localAlias: 'notes',
       remoteKb: 'myserver',
       url: 'http://remote:3000',
-      pat: undefined,
+      secret: undefined,
     })
   })
 

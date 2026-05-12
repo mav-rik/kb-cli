@@ -91,7 +91,7 @@ kb wiki create/list/use/delete/info   Manage wikis
 kb config get/set/list   Configuration
 kb skill [workflow]      Show agent instructions (ingest/search/update/lint)
 kb setup                 Install agent integrations
-kb serve [--port 4141 --token <secret>]  Start server for remote access
+kb serve [--port 4141 --secret <shared-secret>]  Start server for remote access
 kb remote add/remove/list/connect        Manage remote KBs
 kb remote attach/detach/wikis            Manage remote wiki access
 ```
@@ -100,12 +100,14 @@ kb remote attach/detach/wikis            Manage remote wiki access
 
 Connect to remote kb instances (servers running `kb serve`) to access shared team knowledge.
 
+Access control uses a shared secret — both server and client must know the same string. The secret is sent as a Bearer token on every request. This is minimal access control; granular permissions and proper token management are planned for a future release.
+
 ```bash
 # On the server machine
-kb serve --port 4141 --token my-secret
+kb serve --port 4141 --secret my-shared-secret
 
 # On your machine
-kb remote add team --url http://server:4141 --pat my-secret
+kb remote add team --url http://server:4141 --secret my-shared-secret
 kb remote connect team                     # verify connection
 kb remote wikis team                       # list available wikis
 kb remote attach team docs                 # attach "docs" wiki locally

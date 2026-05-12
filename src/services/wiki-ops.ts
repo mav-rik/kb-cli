@@ -243,25 +243,25 @@ export class RemoteWikiOps implements WikiOps {
   constructor(
     private url: string,
     private wiki: string,
-    private pat: string | undefined,
+    private secret: string | undefined,
     private client: RemoteClient,
   ) {}
 
   async search(query: string, limit: number, mode: SearchMode): Promise<SearchResult[]> {
-    return this.client.search(this.url, this.wiki, query, limit, mode, this.pat)
+    return this.client.search(this.url, this.wiki, query, limit, mode, this.secret)
   }
 
   async docExists(filename: string): Promise<boolean> {
-    const data = await this.client.read(this.url, this.wiki, filename, undefined, this.pat)
+    const data = await this.client.read(this.url, this.wiki, filename, undefined, this.secret)
     return !data.error
   }
 
   async readRaw(filename: string): Promise<string> {
-    return this.client.read(this.url, this.wiki, filename, { format: 'raw' }, this.pat)
+    return this.client.read(this.url, this.wiki, filename, { format: 'raw' }, this.secret)
   }
 
   async readDoc(filename: string): Promise<ParsedDoc> {
-    const data = await this.client.read(this.url, this.wiki, filename, { format: 'json' }, this.pat)
+    const data = await this.client.read(this.url, this.wiki, filename, { format: 'json' }, this.secret)
     if (data.error) throw new Error(data.error)
     return {
       frontmatter: data.meta,
@@ -271,62 +271,62 @@ export class RemoteWikiOps implements WikiOps {
   }
 
   async addDoc(title: string, category: string, tags: string[], content: string): Promise<{ id: string; filename: string }> {
-    return this.client.addDoc(this.url, this.wiki, { title, category, tags, content }, this.pat)
+    return this.client.addDoc(this.url, this.wiki, { title, category, tags, content }, this.secret)
   }
 
   async updateDoc(id: string, patch: UpdatePatch): Promise<{ id: string; filename: string }> {
-    return this.client.updateDoc(this.url, this.wiki, id, patch, this.pat)
+    return this.client.updateDoc(this.url, this.wiki, id, patch, this.secret)
   }
 
   async deleteDoc(id: string): Promise<{ deleted: string; warnings: string[] }> {
-    return this.client.deleteDoc(this.url, this.wiki, id, this.pat)
+    return this.client.deleteDoc(this.url, this.wiki, id, this.secret)
   }
 
   async rename(oldId: string, newId: string): Promise<{ oldId: string; newId: string; linksUpdated: number }> {
-    return this.client.rename(this.url, this.wiki, oldId, newId, this.pat)
+    return this.client.rename(this.url, this.wiki, oldId, newId, this.secret)
   }
 
   async listDocs(filters?: { category?: string; tag?: string }): Promise<DocEntry[]> {
-    return this.client.listDocs(this.url, this.wiki, filters, this.pat)
+    return this.client.listDocs(this.url, this.wiki, filters, this.secret)
   }
 
   async categories(): Promise<string[]> {
-    return this.client.categories(this.url, this.wiki, this.pat)
+    return this.client.categories(this.url, this.wiki, this.secret)
   }
 
   async related(id: string, limit: number): Promise<SearchResult[]> {
-    return this.client.related(this.url, this.wiki, id, limit, this.pat)
+    return this.client.related(this.url, this.wiki, id, limit, this.secret)
   }
 
   async lint(): Promise<LintIssue[]> {
-    return this.client.lint(this.url, this.wiki, this.pat)
+    return this.client.lint(this.url, this.wiki, this.secret)
   }
 
   async lintFix(): Promise<{ fixed: number }> {
-    return this.client.lintFix(this.url, this.wiki, this.pat)
+    return this.client.lintFix(this.url, this.wiki, this.secret)
   }
 
   async reindex(): Promise<ReindexResult> {
-    return this.client.reindex(this.url, this.wiki, this.pat)
+    return this.client.reindex(this.url, this.wiki, this.secret)
   }
 
   async toc(): Promise<TocResult> {
-    return this.client.toc(this.url, this.wiki, this.pat)
+    return this.client.toc(this.url, this.wiki, this.secret)
   }
 
   async log(limit: number): Promise<any[]> {
-    return this.client.log(this.url, this.wiki, limit, this.pat)
+    return this.client.log(this.url, this.wiki, limit, this.secret)
   }
 
   async logAdd(op: string, doc?: string, details?: string): Promise<void> {
-    await this.client.logAdd(this.url, this.wiki, op, doc, details, this.pat)
+    await this.client.logAdd(this.url, this.wiki, op, doc, details, this.secret)
   }
 
   async schema(): Promise<string | object | null> {
-    return this.client.schema(this.url, this.wiki, this.pat)
+    return this.client.schema(this.url, this.wiki, this.secret)
   }
 
   async schemaUpdate(): Promise<void> {
-    await this.client.schemaUpdate(this.url, this.wiki, this.pat)
+    await this.client.schemaUpdate(this.url, this.wiki, this.secret)
   }
 }

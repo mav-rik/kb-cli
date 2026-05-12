@@ -13,12 +13,12 @@ export class RemoteController {
   add(
     @Param('name') name: string,
     @Description('Remote URL (e.g., http://host:4141)') @CliOption('url') url: string,
-    @Description('Auth token') @CliOption('pat') @Optional() pat: string,
+    @Description('Shared secret') @CliOption('secret') @Optional() secret: string,
   ): string {
     if (this.remoteConfig.getRemote(name)) {
       return `Error: Remote "${name}" already registered.`
     }
-    this.remoteConfig.addRemote(name, url, pat || undefined)
+    this.remoteConfig.addRemote(name, url, secret || undefined)
     return `Remote "${name}" registered at ${url}`
   }
 
@@ -53,7 +53,7 @@ export class RemoteController {
     if (!remote) return `Error: Remote "${name}" not found.`
 
     try {
-      await this.client.health(remote.url, remote.pat)
+      await this.client.health(remote.url, remote.secret)
       return `Connected to "${name}" at ${remote.url} — OK`
     } catch (err: any) {
       return `Error: Cannot connect to "${name}" at ${remote.url}: ${err.message}`
@@ -67,7 +67,7 @@ export class RemoteController {
     if (!remote) return `Error: Remote "${name}" not found.`
 
     try {
-      const wikis = await this.client.listWikis(remote.url, remote.pat)
+      const wikis = await this.client.listWikis(remote.url, remote.secret)
       if (wikis.length === 0) return `No wikis on remote "${name}".`
 
       const attached = Object.keys(remote.attachedWikis)
@@ -120,7 +120,7 @@ export class RemoteController {
     if (!remote) return `Error: Remote "${kbName}" not found.`
 
     try {
-      await this.client.createWiki(remote.url, wikiName, remote.pat)
+      await this.client.createWiki(remote.url, wikiName, remote.secret)
     } catch (err: any) {
       return `Error: ${err.message}`
     }
@@ -149,7 +149,7 @@ export class RemoteController {
     if (!remote) return `Error: Remote "${kbName}" not found.`
 
     try {
-      await this.client.deleteWiki(remote.url, wikiName, remote.pat)
+      await this.client.deleteWiki(remote.url, wikiName, remote.secret)
     } catch (err: any) {
       return `Error: ${err.message}`
     }

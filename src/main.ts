@@ -63,10 +63,10 @@ class AppController {
   @Description('Start HTTP API server')
   async serve(
     @Description('Port number') @CliOption('port', 'p') @Optional() port: string,
-    @Description('Auth token (require Bearer auth)') @CliOption('token') @Optional() token: string,
+    @Description('Shared secret for access control') @CliOption('secret') @Optional() secret: string,
   ) {
     const p = port ? parseInt(port, 10) : 4141
-    await startServer(p, token || undefined)
+    await startServer(p, secret || undefined)
     await new Promise(() => {})
   }
 }

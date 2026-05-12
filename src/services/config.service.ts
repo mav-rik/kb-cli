@@ -67,7 +67,7 @@ export class ConfigService {
         localAlias: name,
         remoteKb: remoteInfo.remoteName,
         url: remoteInfo.url,
-        pat: remoteInfo.pat,
+        secret: remoteInfo.secret,
       }
     }
     return { type: 'local', name }
