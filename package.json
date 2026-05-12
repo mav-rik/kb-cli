@@ -43,10 +43,10 @@
   },
   "packageManager": "pnpm@10.18.3",
   "dependencies": {
-    "@atscript/core": "^0.1.52",
-    "@atscript/db": "^0.1.70",
-    "@atscript/db-sqlite": "^0.1.70",
-    "@atscript/typescript": "^0.1.52",
+    "@atscript/core": "^0.1.53",
+    "@atscript/db": "^0.1.72",
+    "@atscript/db-sqlite": "^0.1.72",
+    "@atscript/typescript": "^0.1.53",
     "@huggingface/transformers": "^4.2.0",
     "@moostjs/event-cli": "^0.6.9",
     "@moostjs/event-http": "^0.6.9",
@@ -66,7 +66,7 @@
     "@types/node": "^25.6.2",
     "rolldown": "1.0.0",
     "typescript": "^6.0.3",
-    "unplugin-atscript": "^0.1.52",
+    "unplugin-atscript": "^0.1.53",
     "vitest": "^4.1.5"
   }
 }
