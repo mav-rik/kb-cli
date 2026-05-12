@@ -9,6 +9,7 @@
  */
 export const MIGRATION_ALLOWLIST: ReadonlySet<string> = new Set([
   'migrate',
+  'status',
   'version',
   '--version',
   '-v',

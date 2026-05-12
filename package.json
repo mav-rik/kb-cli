@@ -1,6 +1,6 @@
 {
   "name": "kb-wiki",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Knowledge base CLI for AI agents",
   "type": "module",
   "main": "dist/main.js",
@@ -16,7 +16,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "rolldown build -c rolldown.config.ts",
+    "build": "pnpm clean && rolldown build -c rolldown.config.ts",
     "dev": "pnpm build && node ./dist/main.js",
     "test": "vitest run",
     "clean": "rm -rf dist"

@@ -14,6 +14,15 @@ export class MigrateController {
     @Description('Show the migration plan without applying it') @CliOption('dry-run') dryRun: boolean,
     @Description('Limit migration to a single wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
+    const serverInfo = services.localServer.getCached()
+    if (serverInfo) {
+      process.stderr.write(
+        `kb-wiki: stop the local server (kb serve --stop) before running migrate. ` +
+          `Server pid ${serverInfo.pid} on port ${serverInfo.port} has the schema locked.\n`,
+      )
+      process.exit(1)
+    }
+
     const plan = await this.migration.plan({ wiki })
 
     const summary = formatPlan(plan)

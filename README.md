@@ -119,14 +119,43 @@ kb schema                Show wiki schema (structure, conventions)
 kb schema update         Regenerate schema
 kb log                   Recent activity log
 kb migrate               Upgrade local schema/embeddings (--dry-run, --yes, --wiki)
+kb status                Show local environment status (server, config, wikis)
 kb wiki create/list/use/delete/info   Manage wikis
 kb config get/set/list   Configuration
 kb skill [workflow]      Show agent instructions (ingest/search/update/lint)
 kb setup                 Install agent integrations
-kb serve [--port 4141 --secret <shared-secret>]  Start server for remote access
+kb serve [--port 4141 --secret <s> --detached --log <path> --stop]   HTTP API server
 kb remote add/remove/list/connect        Manage remote KBs
 kb remote attach/detach/wikis            Manage remote wiki access
 ```
+
+## Speed up: run a local server
+
+Every `kb` invocation that touches the index loads the embedding model into memory (~200 MB for `bge-base-en-v1.5`, ~2-3 seconds on Apple Silicon). Across many commands per session, that adds up.
+
+If you start `kb serve` in the background, every subsequent `kb` command on the same machine **auto-detects the running server and routes through it** — the model stays warm in the server process. Typical search latency drops from ~2-3s to ~50-150ms.
+
+```bash
+# Start the server in the background
+kb serve --detached
+
+# Optional: capture the server's stdout/stderr to a file
+kb serve --detached --log /tmp/kb-server.log
+
+# Inspect what's running and which model the server has loaded
+kb status
+
+# When you're done, stop it
+kb serve --stop
+```
+
+No flags are needed on the routed commands themselves — `kb search`, `kb read`, `kb add`, `kb update`, `kb reindex`, etc. all detect the server transparently. `kb status` shows whether routing is active and surfaces any mismatch between the server's loaded model and the current `config.json` (a restart picks up config changes).
+
+Notes:
+- The server binds to `127.0.0.1`; no auth is required by default for purely local use. If you pass `--secret <token>`, every routed call sends it as a Bearer token automatically.
+- A coordination file at `~/.kb/.serve.json` records port / pid / model. It's removed cleanly on `kb serve --stop` and on `SIGINT`/`SIGTERM`.
+- `kb migrate` refuses to run while the server is up (concurrent schema mutation would be unsafe) — stop the server first.
+- Only one local server at a time. A second `kb serve` exits with a clear error pointing at the running one.
 
 ## Remote KBs
 
