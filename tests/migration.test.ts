@@ -28,6 +28,17 @@ function freshKbDir() {
   fs.mkdirSync(kbDir, { recursive: true })
 }
 
+// Deterministic content-driven one-hot embedding: identical text → identical
+// vector → cosine distance 0; different text → orthogonal vectors → distance 2.
+// Lets us assert real ranking behavior of semanticSearch without loading a model.
+function hashedVec(text: string): Float32Array {
+  const v = new Float32Array(768)
+  let h = 0
+  for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) | 0
+  v[Math.abs(h) % 768] = 1
+  return v
+}
+
 function buildServices() {
   const config = new ConfigService()
   const parser = new ParserService()
@@ -37,12 +48,8 @@ function buildServices() {
   const embedding = new EmbeddingService(config)
   const wikis = new WikiManagementService(config)
 
-  // Replace the real model loader with a deterministic 768-float stub so
-  // tests stay offline. We patch both embed and embedBatch — the migration
-  // path only uses embedBatch but other call sites might use embed.
-  const fakeVec = () => new Float32Array(768).fill(0.001)
-  embedding.embedBatch = async (texts: string[]) => texts.map(() => fakeVec())
-  embedding.embed = async () => fakeVec()
+  embedding.embedBatch = async (texts: string[]) => texts.map((t) => hashedVec(t))
+  embedding.embed = async (t: string) => hashedVec(t)
   embedding.init = async () => undefined
 
   const migration = new MigrationService(config, index, embedding, fts, storage, parser, wikis)
@@ -196,5 +203,118 @@ describe('MigrationService', () => {
     await migration.run({})
 
     expect(await index.hasLegacyVecTable('w')).toBe(false)
+  })
+
+  it('semanticSearch ranks the doc matching the query vector first', async () => {
+    writeMarkdown('w', 'apple', 'apple apple apple')
+    writeMarkdown('w', 'banana', 'banana banana banana')
+    writeMarkdown('w', 'carrot', 'carrot carrot carrot')
+
+    const { migration, index, storage } = buildServices()
+    await migration.run({})
+
+    // Re-hash the exact body the migration embedded so the query vector
+    // collides 1:1 with the banana doc and is orthogonal to the others.
+    const bananaDoc = storage.readDoc('w', 'banana.md')
+    const queryVec = hashedVec(bananaDoc.body)
+    const hits = await index.semanticSearch('w', queryVec, 10)
+
+    expect(hits.length).toBeGreaterThanOrEqual(1)
+    expect(hits[0].id).toBe('banana')
+    expect(hits[0].distance).toBeLessThan(0.01)
+    // The runner-up should be meaningfully more distant. Strict
+    // `> 1` would fail if two unrelated bodies happen to hash to the
+    // same bucket mod 768 (rare, but Birthday paradox is real).
+    if (hits.length > 1) {
+      expect(hits[1].distance).toBeGreaterThan(hits[0].distance + 0.5)
+    }
+  })
+
+  it('embed-only mode: existing row with matching contentHash and NULL embedding', async () => {
+    writeMarkdown('w', 'first', 'first body')
+    writeMarkdown('w', 'second', 'second body')
+
+    // Run the migration once to populate everything.
+    const services = buildServices()
+    await services.migration.run({})
+    expect(await services.index.countDocsWithoutEmbedding('w')).toBe(0)
+
+    // Capture the row metadata so we can prove the migration's "embed
+    // mode" branch doesn't touch contentHash / category / title / etc.
+    const before = await services.index.listDocsForMigration('w')
+
+    // NULL out the embedding for one doc via a fresh SQLite handle.
+    // The schema has vec0 triggers on `documents`, so the sqlite-vec
+    // extension must be loaded before we can write to the table.
+    // contentHash stays intact, so the migration must take the
+    // embed-only path (NOT the full reindex path).
+    const Database = (await import('better-sqlite3')).default
+    const sqliteVec = await import('sqlite-vec')
+    const dbPath = path.join(kbDir, 'w', 'index.db')
+    const direct = new Database(dbPath)
+    sqliteVec.load(direct)
+    direct.exec("UPDATE documents SET embedding = NULL WHERE id = 'first'")
+    direct.close()
+
+    // Rebuild services so IndexService re-opens the DB and sees the NULL.
+    const fresh = buildServices()
+    expect(await fresh.index.countDocsWithoutEmbedding('w')).toBe(1)
+
+    // Track whether reindex-only side effects fire. FTS.upsert is only
+    // called on the "reindex" branch, not the "embed" branch — if it
+    // fires, the wrong branch was taken.
+    let ftsUpsertCalls = 0
+    const origUpsert = fresh.fts.upsert.bind(fresh.fts)
+    fresh.fts.upsert = ((kb: string, id: string, t: string, tg: string[], b: string) => {
+      ftsUpsertCalls++
+      return origUpsert(kb, id, t, tg, b)
+    }) as typeof fresh.fts.upsert
+
+    await fresh.migration.run({})
+
+    expect(await fresh.index.countDocsWithoutEmbedding('w')).toBe(0)
+    expect(ftsUpsertCalls).toBe(0) // proves embed-only path was used
+
+    // contentHash + other metadata unchanged for both rows.
+    const after = await fresh.index.listDocsForMigration('w')
+    const byId = (rows: typeof after) =>
+      Object.fromEntries(rows.map((r) => [r.id, r.contentHash]))
+    expect(byId(after)).toEqual(byId(before))
+  })
+
+  it('crash mid-run leaves marker; next run resumes to completion', async () => {
+    // 27 docs forces 2 batches at BATCH_SIZE=25.
+    for (let i = 0; i < 27; i++) writeMarkdown('w', `doc${i}`, `body ${i}`)
+
+    const services = buildServices()
+    // Throw on the second embedBatch call to simulate a crash partway through.
+    let batchCalls = 0
+    services.embedding.embedBatch = async (texts: string[]) => {
+      batchCalls++
+      if (batchCalls === 2) throw new Error('simulated crash on batch 2')
+      return texts.map((t) => hashedVec(t))
+    }
+
+    await expect(services.migration.run({})).rejects.toThrow('simulated crash')
+
+    // Marker still present — the gate will keep firing on next startup.
+    expect(fs.existsSync(path.join(kbDir, 'w', '.migration-in-progress'))).toBe(true)
+    // upsertDoc runs INSIDE the post-embedBatch inner loop, so a crash
+    // in embedBatch leaves the second batch's rows entirely unwritten.
+    // Filesystem has 27 docs; DB has only what the first batch finished.
+    const partial = await services.index.countDocs('w')
+    expect(partial).toBeLessThan(27)
+    expect(partial).toBeGreaterThan(0)
+    // schemaVersion stays at 0 — the gate remains active.
+    expect(services.config.getSchemaVersion()).toBe(0)
+
+    // Restore a working embedBatch and re-run.
+    const fresh = buildServices()
+    await fresh.migration.run({})
+
+    expect(fs.existsSync(path.join(kbDir, 'w', '.migration-in-progress'))).toBe(false)
+    expect(await fresh.index.countDocsWithoutEmbedding('w')).toBe(0)
+    expect(await fresh.index.countDocs('w')).toBe(27)
+    expect(fresh.config.getSchemaVersion()).toBe(CURRENT_SCHEMA_VERSION)
   })
 })
