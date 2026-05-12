@@ -5,26 +5,27 @@ import { toFilename, parseLineRange } from '../utils/slug.js'
 @Controller('read')
 export class ReadController {
   private get config() { return services.config }
-  private get storage() { return services.storage }
+  private get gateway() { return services.gateway }
 
   @Cli(':path')
   @Description('Read a document')
-  read(
+  async read(
     @Param('path') docPath: string,
     @Description('Line range (e.g., 1-50)') @CliOption('lines', 'l') @Optional() lines: string,
     @Description('Show metadata only') @CliOption('meta', 'm') meta: boolean,
     @Description('List outgoing links') @CliOption('links') links: boolean,
     @Description('Follow a link') @CliOption('follow', 'f') @Optional() follow: string,
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
-  ) {
-    const kbName = this.config.resolveWiki(wiki)
+  ): Promise<string | object> {
+    const ref = this.config.resolveWiki(wiki)
+    const ops = this.gateway.getOps(ref)
     const targetPath = toFilename(follow ? follow.replace(/^\.\//, '') : docPath)
 
-    if (!this.storage.docExists(kbName, targetPath)) {
-      return `Error: Document "${targetPath}" not found in wiki "${kbName}".`
+    if (!await ops.docExists(targetPath)) {
+      return `Error: Document "${targetPath}" not found.`
     }
 
-    const doc = this.storage.readDoc(kbName, targetPath)
+    const doc = await ops.readDoc(targetPath)
 
     if (meta) {
       return doc.frontmatter

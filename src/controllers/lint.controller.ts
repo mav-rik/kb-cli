@@ -1,13 +1,11 @@
 import { Controller, Cli, CliOption, Description, Optional } from '@moostjs/event-cli'
 import { services } from '../services/container.js'
+import type { LintIssue } from '../services/doc-workflow.service.js'
 
 @Controller()
 export class LintController {
   private get config() { return services.config }
-  private get workflow() { return services.docWorkflow }
-  private get schema() { return services.schema }
-  private get index() { return services.index }
-  private get activityLog() { return services.activityLog }
+  private get gateway() { return services.gateway }
 
   @Cli('lint')
   @Description('Check knowledge base integrity')
@@ -15,20 +13,28 @@ export class LintController {
     @Description('Auto-fix issues') @CliOption('fix') fix: boolean,
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
-    const kbName = this.config.resolveWiki(wiki)
-    const issues = await this.workflow.lint(kbName)
-
+    const ref = this.config.resolveWiki(wiki)
+    const ops = this.gateway.getOps(ref)
+    let issues: LintIssue[]
     let fixedCount = 0
+
     if (fix) {
-      fixedCount = await this.workflow.lintFix(kbName, issues)
+      const result = await ops.lintFix()
+      issues = await ops.lint()
+      fixedCount = result.fixed
+    } else {
+      issues = await ops.lint()
     }
 
     if (issues.length === 0) {
-      return `Lint report for "${kbName}" (0 issues found): All clear!`
+      if (fix && fixedCount > 0) {
+        return `All ${fixedCount} issues fixed.`
+      }
+      return `Lint: 0 issues found. All clear!`
     }
 
     const lines: string[] = []
-    lines.push(`Lint report for "${kbName}" (${issues.length} issues found):`)
+    lines.push(`Lint report (${issues.length} issues found):`)
     lines.push('')
     lines.push('Type     | Severity | File            | Details')
     lines.push('---------|----------|-----------------|----------------------------------')
@@ -52,16 +58,9 @@ export class LintController {
   async reindex(
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
-    const kbName = this.config.resolveWiki(wiki)
-
-    const result = await this.workflow.reindex(kbName, (current, total) => {
-      process.stderr.write(`Reindexing... ${current}/${total}\r`)
-    })
-
-    if (result.count > 0) {
-      process.stderr.write('\n')
-    }
-
+    const ref = this.config.resolveWiki(wiki)
+    const ops = this.gateway.getOps(ref)
+    const result = await ops.reindex()
     return `Reindexed ${result.count} documents in ${result.elapsed}.`
   }
 
@@ -70,30 +69,25 @@ export class LintController {
   async toc(
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
-    const kbName = this.config.resolveWiki(wiki)
+    const ref = this.config.resolveWiki(wiki)
+    const ops = this.gateway.getOps(ref)
+    const result = await ops.toc()
 
-    const docs = await this.index.listDocs(kbName)
-
-    if (docs.length === 0) {
+    const allDocs = Object.values(result.categories).flat()
+    if (allDocs.length === 0) {
       return 'No documents in this knowledge base.'
     }
 
-    const grouped: Record<string, { id: string; title: string; filePath: string }[]> = {}
-    for (const doc of docs) {
-      const cat = doc.category || 'uncategorized'
-      if (!grouped[cat]) grouped[cat] = []
-      grouped[cat].push({ id: doc.id, title: doc.title, filePath: doc.filePath })
-    }
-
     const lines: string[] = []
-    lines.push(`# ${kbName} (${docs.length} documents)`)
+    lines.push(`# Table of Contents (${allDocs.length} documents)`)
     lines.push('')
 
-    const categories = Object.keys(grouped).sort()
+    const categories = Object.keys(result.categories).sort()
     for (const cat of categories) {
-      lines.push(`## ${cat} (${grouped[cat].length})`)
-      const items = grouped[cat].sort((a, b) => a.title.localeCompare(b.title))
-      for (const item of items) {
+      const items = result.categories[cat]
+      lines.push(`## ${cat} (${items.length})`)
+      const sorted = items.sort((a, b) => a.title.localeCompare(b.title))
+      for (const item of sorted) {
         lines.push(`  - ${item.title} [${item.id}.md]`)
       }
       lines.push('')
@@ -104,13 +98,14 @@ export class LintController {
 
   @Cli('log')
   @Description('Show recent activity log')
-  log(
+  async log(
     @Description('Number of entries') @CliOption('limit', 'n') @Optional() limit: string,
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
-  ): string {
-    const kbName = this.config.resolveWiki(wiki)
+  ): Promise<string> {
+    const ref = this.config.resolveWiki(wiki)
+    const ops = this.gateway.getOps(ref)
     const parsedLimit = limit ? parseInt(limit, 10) : 20
-    const entries = this.activityLog.recent(kbName, parsedLimit)
+    const entries = await ops.log(parsedLimit)
 
     if (entries.length === 0) {
       return 'No activity recorded.'
@@ -125,15 +120,33 @@ export class LintController {
     return lines.join('\n')
   }
 
+  @Cli('log/add')
+  @Description('Add a manual log entry (for agent session summaries)')
+  async logAdd(
+    @Description('Operation type (ingest, query, lint, note)') @CliOption('op', 'o') op: string,
+    @Description('Related document ID') @CliOption('doc', 'd') @Optional() doc: string,
+    @Description('Details / reasoning') @CliOption('details', 'm') @Optional() details: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
+  ): Promise<string> {
+    const ref = this.config.resolveWiki(wiki)
+    const ops = this.gateway.getOps(ref)
+    await ops.logAdd(op || 'note', doc, details)
+    return `Logged: ${op || 'note'}${doc ? ` ${doc}` : ''}${details ? ` (${details})` : ''}`
+  }
+
   @Cli('schema')
   @Description('Show knowledge base schema')
-  schemaRead(
+  async schemaRead(
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
-  ): string {
-    const kbName = this.config.resolveWiki(wiki)
-    const content = this.schema.read(kbName)
+  ): Promise<string> {
+    const ref = this.config.resolveWiki(wiki)
+    const ops = this.gateway.getOps(ref)
+    const content = await ops.schema()
     if (!content) {
-      return `No schema found for "${kbName}". Run \`kb schema update\` to generate.`
+      return `No schema found. Run \`kb schema update\` to generate.`
+    }
+    if (typeof content === 'object') {
+      return JSON.stringify(content, null, 2)
     }
     return content
   }
@@ -143,8 +156,9 @@ export class LintController {
   async schemaUpdate(
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
-    const kbName = this.config.resolveWiki(wiki)
-    await this.schema.update(kbName)
-    return `Schema updated for "${kbName}".`
+    const ref = this.config.resolveWiki(wiki)
+    const ops = this.gateway.getOps(ref)
+    await ops.schemaUpdate()
+    return `Schema updated.`
   }
 }

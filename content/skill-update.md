@@ -4,7 +4,6 @@ Follow these steps when updating, renaming, or reorganizing documents.
 
 ## Updating content
 
-**CLI:**
 ```bash
 # Append new information
 kb update <id> --append "\n\n## New Section\n\nNew content here"
@@ -18,64 +17,33 @@ kb update <id> --category new-category
 kb update <id> --tags "new,tags"
 ```
 
-**API:**
-```
-PUT /api/docs/<id>
-body: { "append": "\n\n## New Section\n\nNew content here" }
-
-PUT /api/docs/<id>
-body: { "content": "complete new content" }
-
-PUT /api/docs/<id>
-body: { "title": "Better Title" }
-
-PUT /api/docs/<id>
-body: { "category": "new-category" }
-
-PUT /api/docs/<id>
-body: { "tags": ["new","tags"] }
-```
-
 ## After every update (MANDATORY)
 
 Check for docs that might now be outdated:
 
-**CLI:**
 ```bash
 kb related <id>
 kb search "<key changed facts>"
 ```
 
-**API:**
-```
-GET /api/docs/<id>/related?wiki=<name>&limit=10
-GET /api/search?q=<key changed facts>&limit=10&wiki=<name>
-```
+Read each related doc. If any contradict the updated information, resolve the conflict:
 
-Read each related doc. Fix any contradictions:
+### Conflict resolution
 
-**CLI:**
+1. **Check recency**: `kb log` — which information is newer?
+2. **Check authority**: primary source beats secondary. Official docs beat informal notes.
+3. **Check specificity**: concrete claims supersede vague ones.
+4. **When clear**: update the stale doc, noting what changed.
+5. **When unclear**: flag with "⚠️ Conflicts with [doc](./doc.md)" and ask the user.
+
 ```bash
 kb update <related-id> --content "corrected content"
 ```
 
-**API:**
-```
-PUT /api/docs/<related-id>
-body: { "content": "corrected content" }
-```
-
 ## Renaming
 
-**CLI:**
 ```bash
 kb rename <old-id> <new-id>
-```
-
-**API:**
-```
-POST /api/docs/<old-id>/rename
-body: { "newId": "<new-id>" }
 ```
 
 This automatically:
@@ -85,41 +53,22 @@ This automatically:
 
 ## Deleting
 
-**CLI:**
 ```bash
 kb delete <id>
 ```
 
-**API:**
-```
-DELETE /api/docs/<id>?wiki=<name>
-```
-
 If other docs linked to it, they'll be warned about broken links. Fix them:
 
-**CLI:**
 ```bash
 kb lint --fix
-```
-
-**API:**
-```
-POST /api/lint/fix?wiki=<name>
 ```
 
 ## Reorganizing
 
 Change a doc's category:
 
-**CLI:**
 ```bash
 kb update <id> --category new-category
-```
-
-**API:**
-```
-PUT /api/docs/<id>
-body: { "category": "new-category" }
 ```
 
 Split a large doc: create new smaller docs with portions of the content, add cross-links, then either delete or slim down the original.

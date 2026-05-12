@@ -66,7 +66,7 @@ export class ApiController {
 
   @Get('search')
   async search(@Query('q') q: string, @Query('limit') limit: string, @Query('mode') mode: string, @Query('wiki') wiki: string) {
-    const resolvedWiki = this.config.resolveWiki(wiki)
+    const resolvedWiki = this.config.resolveWikiName(wiki)
     const parsedLimit = limit ? parseInt(limit, 10) : 10
     if (!q) return { error: 'Query parameter "q" is required' }
     const searchMode = (mode === 'fts' || mode === 'vec') ? mode : 'hybrid' as const
@@ -77,7 +77,7 @@ export class ApiController {
 
   @Get('read/:filename')
   async read(@Param('filename') filename: string, @Query('wiki') wiki: string, @Query('lines') lines: string, @Query('format') format: string, @Query('meta') meta: string, @Query('links') links: string) {
-    const resolvedWiki = this.config.resolveWiki(wiki)
+    const resolvedWiki = this.config.resolveWikiName(wiki)
     const targetPath = toFilename(filename)
 
     if (!this.storage.docExists(resolvedWiki, targetPath)) {
@@ -107,7 +107,7 @@ export class ApiController {
   @Post('docs')
   @SetStatus(201)
   async addDoc(@Body() body: { title: string; category: string; tags?: string[]; content?: string; body?: string; text?: string; wiki?: string }) {
-    const wikiName = this.config.resolveWiki(body.wiki)
+    const wikiName = this.config.resolveWikiName(body.wiki)
     const id = slugify(body.title)
     const filename = `${id}.md`
 
@@ -134,7 +134,7 @@ export class ApiController {
 
   @Put('docs/:id')
   async updateDoc(@Param('id') id: string, @Body() body: { title?: string; category?: string; tags?: string[]; content?: string; body?: string; text?: string; append?: string; wiki?: string }) {
-    const wikiName = this.config.resolveWiki(body.wiki)
+    const wikiName = this.config.resolveWikiName(body.wiki)
     const filename = toFilename(id)
     const docId = toDocId(filename)
 
@@ -168,7 +168,7 @@ export class ApiController {
 
   @Delete('docs/:id')
   async deleteDoc(@Param('id') id: string, @Query('wiki') wiki: string) {
-    const wikiName = this.config.resolveWiki(wiki)
+    const wikiName = this.config.resolveWikiName(wiki)
     const filename = toFilename(id)
     const docId = toDocId(filename)
 
@@ -192,7 +192,7 @@ export class ApiController {
   @Get('docs/:id/related')
   @Get('related/:id')
   async related(@Param('id') id: string, @Query('wiki') wiki: string, @Query('limit') limit: string) {
-    const resolvedWiki = this.config.resolveWiki(wiki)
+    const resolvedWiki = this.config.resolveWikiName(wiki)
     const parsedLimit = limit ? parseInt(limit, 10) : 10
     const filename = toFilename(id)
     const docId = toDocId(filename)
@@ -207,7 +207,7 @@ export class ApiController {
 
   @Post('docs/:id/rename')
   async renameDoc(@Param('id') id: string, @Body() body: { newId?: string; to?: string; name?: string; wiki?: string }) {
-    const wikiName = this.config.resolveWiki(body.wiki)
+    const wikiName = this.config.resolveWikiName(body.wiki)
     const oldFilename = toFilename(id)
     const newId = body.newId || body.to || body.name
     if (!newId) {
@@ -231,7 +231,7 @@ export class ApiController {
   @Get('docs')
   @Get('list')
   async listDocs(@Query('wiki') wiki: string, @Query('category') category: string, @Query('tag') tag: string) {
-    const wikiName = this.config.resolveWiki(wiki)
+    const wikiName = this.config.resolveWikiName(wiki)
     return this.index.listDocs(wikiName, { category, tag })
   }
 
@@ -239,7 +239,7 @@ export class ApiController {
 
   @Get('categories')
   async categories(@Query('wiki') wiki: string) {
-    const wikiName = this.config.resolveWiki(wiki)
+    const wikiName = this.config.resolveWikiName(wiki)
     const docs = await this.index.listDocs(wikiName)
     return [...new Set(docs.map((d) => d.category).filter(Boolean))].sort()
   }
@@ -267,13 +267,13 @@ export class ApiController {
 
   @Get('lint')
   async lint(@Query('wiki') wiki: string) {
-    const wikiName = this.config.resolveWiki(wiki)
+    const wikiName = this.config.resolveWikiName(wiki)
     return this.workflow.lint(wikiName)
   }
 
   @Post('lint/fix')
   async lintFix(@Query('wiki') wiki: string) {
-    const wikiName = this.config.resolveWiki(wiki)
+    const wikiName = this.config.resolveWikiName(wiki)
     const issues = await this.workflow.lint(wikiName)
     const fixed = await this.workflow.lintFix(wikiName, issues)
     return { fixed }
@@ -283,7 +283,7 @@ export class ApiController {
 
   @Post('reindex')
   async reindex(@Query('wiki') wiki: string) {
-    const wikiName = this.config.resolveWiki(wiki)
+    const wikiName = this.config.resolveWikiName(wiki)
     return this.workflow.reindex(wikiName)
   }
 
@@ -291,7 +291,7 @@ export class ApiController {
 
   @Get('toc')
   async toc(@Query('wiki') wiki: string) {
-    const wikiName = this.config.resolveWiki(wiki)
+    const wikiName = this.config.resolveWikiName(wiki)
     const docs = await this.index.listDocs(wikiName)
 
     const grouped: Record<string, { id: string; title: string; filePath: string }[]> = {}
@@ -308,9 +308,16 @@ export class ApiController {
 
   @Get('log')
   log(@Query('wiki') wiki: string, @Query('limit') limit: string) {
-    const wikiName = this.config.resolveWiki(wiki)
+    const wikiName = this.config.resolveWikiName(wiki)
     const parsedLimit = limit ? parseInt(limit, 10) : 20
     return this.activityLog.recent(wikiName, parsedLimit)
+  }
+
+  @Post('log')
+  logAdd(@Body() body: { op?: string; doc?: string; details?: string; wiki?: string }) {
+    const wikiName = this.config.resolveWikiName(body.wiki)
+    this.activityLog.log(wikiName, body.op || 'note', body.doc, body.details)
+    return { logged: true, op: body.op || 'note', doc: body.doc, details: body.details }
   }
 
   // ─── Wiki Use ──────────────────────────────────────────────────────────────
@@ -340,7 +347,7 @@ export class ApiController {
 
   @Get('schema')
   schemaRead(@Query('wiki') wiki: string) {
-    const wikiName = this.config.resolveWiki(wiki)
+    const wikiName = this.config.resolveWikiName(wiki)
     const content = this.schema.read(wikiName)
     if (!content) return { error: 'No schema found. Call POST /api/schema to generate.' }
     return content
@@ -348,7 +355,7 @@ export class ApiController {
 
   @Post('schema')
   async schemaUpdate(@Query('wiki') wiki: string) {
-    const wikiName = this.config.resolveWiki(wiki)
+    const wikiName = this.config.resolveWikiName(wiki)
     await this.schema.update(wikiName)
     return { updated: true, wiki: wikiName }
   }

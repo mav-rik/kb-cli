@@ -18,9 +18,19 @@
   "scripts": {
     "build": "rolldown build -c rolldown.config.ts",
     "dev": "pnpm build && node ./dist/main.js",
+    "test": "vitest run",
     "clean": "rm -rf dist"
   },
-  "keywords": ["wiki", "knowledge-base", "ai", "llm", "memory", "cli", "semantic-search", "markdown"],
+  "keywords": [
+    "wiki",
+    "knowledge-base",
+    "ai",
+    "llm",
+    "memory",
+    "cli",
+    "semantic-search",
+    "markdown"
+  ],
   "author": "Artem Maltsev <artem@maltsev.nl>",
   "license": "MIT",
   "repository": {
@@ -56,6 +66,7 @@
     "@types/node": "^25.6.2",
     "rolldown": "1.0.0",
     "typescript": "^6.0.3",
-    "unplugin-atscript": "^0.1.52"
+    "unplugin-atscript": "^0.1.52",
+    "vitest": "^4.1.5"
   }
 }

@@ -1,17 +1,13 @@
 import * as fs from 'node:fs'
 import { Controller, Cli, Param, CliOption, Description, Optional } from '@moostjs/event-cli'
 import { services } from '../services/container.js'
-import { DocFrontmatter } from '../services/parser.service.js'
-import { slugify, toFilename, toDocId, today } from '../utils/slug.js'
+import type { UpdatePatch } from '../services/wiki-ops.js'
 
 @Controller()
 export class DocController {
   private get config() { return services.config }
-  private get storage() { return services.storage }
+  private get gateway() { return services.gateway }
   private get parser() { return services.parser }
-  private get index() { return services.index }
-  private get workflow() { return services.docWorkflow }
-  private get log() { return services.activityLog }
 
   @Cli('add')
   @Description('Add a new document')
@@ -24,16 +20,8 @@ export class DocController {
     @Description('Read from stdin') @CliOption('stdin') stdin: boolean,
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
-    const kbName = this.config.resolveWiki(wiki)
-    const id = slugify(title)
-    const filename = `${id}.md`
-
-    if (this.storage.docExists(kbName, filename)) {
-      return `Error: Document "${filename}" already exists in wiki "${kbName}".`
-    }
-
     let body = ''
-    let fileFrontmatter: Partial<DocFrontmatter> | undefined
+    let fileFrontmatter: { title?: string; category?: string; tags?: string[] } | undefined
 
     if (file) {
       if (!fs.existsSync(file)) {
@@ -53,35 +41,19 @@ export class DocController {
       body = content
     }
 
-    const frontmatter: DocFrontmatter = {
-      id,
-      title: fileFrontmatter?.title || title,
-      category: fileFrontmatter?.category || category,
-      tags: fileFrontmatter?.tags?.length
-        ? fileFrontmatter.tags
-        : tags
-          ? tags.split(',').map((t) => t.trim())
-          : [],
-      created: today(),
-      updated: today(),
+    const ref = this.config.resolveWiki(wiki)
+    const ops = this.gateway.getOps(ref)
+    try {
+      const result = await ops.addDoc(
+        fileFrontmatter?.title || title,
+        fileFrontmatter?.category || category,
+        fileFrontmatter?.tags?.length ? fileFrontmatter.tags : tags ? tags.split(',').map(t => t.trim()) : [],
+        body,
+      )
+      return `Created: ${result.filename}`
+    } catch (err: any) {
+      return `Error: ${err.message}`
     }
-
-    this.storage.writeDoc(kbName, filename, frontmatter, body)
-
-    const links = this.parser.extractLinks(body)
-    const warnings: string[] = []
-    for (const link of links) {
-      if (!this.storage.docExists(kbName, link.target)) {
-        warnings.push(`Warning: Broken link to "${link.target}" (target does not exist)`)
-      }
-    }
-
-    await this.workflow.indexAndEmbed(kbName, id, frontmatter, body, filename)
-    this.log.log(kbName, 'add', id, `category=${frontmatter.category}`)
-
-    const output = [`Created: ${filename}`]
-    output.push(...warnings)
-    return output.join('\n')
   }
 
   @Cli('update/:id')
@@ -95,36 +67,21 @@ export class DocController {
     @Description('Append content') @CliOption('append') @Optional() append: string,
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
-    const kbName = this.config.resolveWiki(wiki)
-    const filename = toFilename(id)
-    const docId = toDocId(filename)
+    const ref = this.config.resolveWiki(wiki)
+    const ops = this.gateway.getOps(ref)
+    const patch: UpdatePatch = {}
+    if (title !== undefined) patch.title = title
+    if (category !== undefined) patch.category = category
+    if (tags !== undefined) patch.tags = tags.split(',').map(t => t.trim())
+    if (content !== undefined) patch.content = content
+    if (append !== undefined) patch.append = append
 
-    if (!this.storage.docExists(kbName, filename)) {
-      return `Error: Document "${filename}" not found in wiki "${kbName}".`
+    try {
+      const result = await ops.updateDoc(id, patch)
+      return `Updated: ${result.filename}`
+    } catch (err: any) {
+      return `Error: ${err.message}`
     }
-
-    const doc = this.storage.readDoc(kbName, filename)
-
-    const frontmatter: DocFrontmatter = {
-      ...doc.frontmatter,
-      ...(title !== undefined && { title }),
-      ...(category !== undefined && { category }),
-      ...(tags !== undefined && { tags: tags.split(',').map((t) => t.trim()) }),
-      updated: today(),
-    }
-
-    let body = doc.body
-    if (content !== undefined) {
-      body = content
-    } else if (append !== undefined) {
-      body = body + append
-    }
-
-    this.storage.writeDoc(kbName, filename, frontmatter, body)
-    await this.workflow.indexAndEmbed(kbName, docId, frontmatter, body, filename)
-    this.log.log(kbName, 'update', docId)
-
-    return `Updated: ${filename}`
   }
 
   @Cli('delete/:id')
@@ -133,30 +90,16 @@ export class DocController {
     @Param('id') id: string,
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
-    const kbName = this.config.resolveWiki(wiki)
-    const filename = toFilename(id)
-    const docId = toDocId(filename)
-
-    if (!this.storage.docExists(kbName, filename)) {
-      return `Error: Document "${filename}" not found in wiki "${kbName}".`
+    const ref = this.config.resolveWiki(wiki)
+    const ops = this.gateway.getOps(ref)
+    try {
+      const result = await ops.deleteDoc(id)
+      const output = [`Deleted: ${result.deleted}`]
+      if (result.warnings.length > 0) output.push(...result.warnings.map(w => `Warning: ${w}`))
+      return output.join('\n')
+    } catch (err: any) {
+      return `Error: ${err.message}`
     }
-
-    const backlinks = await this.index.getLinksTo(kbName, docId)
-    const warnings: string[] = []
-    if (backlinks.length > 0) {
-      const sources = backlinks.map((l) => `${l.fromId}.md`)
-      warnings.push(
-        `Warning: ${backlinks.length} document(s) have broken links to ${filename}: ${sources.join(', ')}`,
-      )
-    }
-
-    this.storage.deleteDoc(kbName, filename)
-    await this.workflow.removeFromIndex(kbName, docId)
-    this.log.log(kbName, 'delete', docId)
-
-    const output = [`Deleted: ${filename}`]
-    output.push(...warnings)
-    return output.join('\n')
   }
 
   @Cli('rename/:oldId/:newId')
@@ -166,25 +109,15 @@ export class DocController {
     @Param('newId') newId: string,
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
-    const kbName = this.config.resolveWiki(wiki)
-    const oldFilename = `${oldId}.md`
-    const newFilename = `${newId}.md`
-
-    if (!this.storage.docExists(kbName, oldFilename)) {
-      return `Error: Document "${oldFilename}" not found in wiki "${kbName}".`
+    const ref = this.config.resolveWiki(wiki)
+    const ops = this.gateway.getOps(ref)
+    try {
+      const result = await ops.rename(oldId, newId)
+      const linkInfo = result.linksUpdated > 0 ? ` Updated links in ${result.linksUpdated} documents.` : ''
+      return `Renamed: ${oldId}.md → ${newId}.md.${linkInfo}`
+    } catch (err: any) {
+      return `Error: ${err.message}`
     }
-
-    if (this.storage.docExists(kbName, newFilename)) {
-      return `Error: Document "${newFilename}" already exists in wiki "${kbName}".`
-    }
-
-    const modifiedCount = await this.workflow.rename(kbName, oldId, newId, oldFilename, newFilename)
-    this.log.log(kbName, 'rename', newId, `from=${oldId}`)
-
-    const linkInfo = modifiedCount > 0
-      ? ` Updated links in ${modifiedCount} documents.`
-      : ''
-    return `Renamed: ${oldFilename} → ${newFilename}.${linkInfo}`
   }
 
   @Cli('list')
@@ -195,9 +128,9 @@ export class DocController {
     @Description('Output format') @CliOption('format') @Optional() format: string,
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string | object> {
-    const kbName = this.config.resolveWiki(wiki)
-
-    const docs = await this.index.listDocs(kbName, { category, tag })
+    const ref = this.config.resolveWiki(wiki)
+    const ops = this.gateway.getOps(ref)
+    const docs = await ops.listDocs({ category, tag })
 
     if (docs.length === 0) {
       return 'No documents found.'
@@ -211,8 +144,7 @@ export class DocController {
     const separator = '---|-------|----------|------|--------'
     const rows = docs.map((doc) => {
       const tagsStr = Array.isArray(doc.tags) ? doc.tags.join(', ') : ''
-      const updated = doc.updatedAt ? new Date(doc.updatedAt).toISOString().split('T')[0] : ''
-      return `${doc.id} | ${doc.title} | ${doc.category} | ${tagsStr} | ${updated}`
+      return `${doc.id} | ${doc.title} | ${doc.category} | ${tagsStr}`
     })
 
     return [header, separator, ...rows].join('\n')
@@ -223,9 +155,9 @@ export class DocController {
   async categories(
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
-    const kbName = this.config.resolveWiki(wiki)
-    const docs = await this.index.listDocs(kbName)
-    const cats = [...new Set(docs.map((d) => d.category).filter(Boolean))].sort()
+    const ref = this.config.resolveWiki(wiki)
+    const ops = this.gateway.getOps(ref)
+    const cats = await ops.categories()
     if (cats.length === 0) return 'No categories found.'
     return cats.join('\n')
   }

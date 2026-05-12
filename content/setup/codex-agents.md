@@ -10,5 +10,11 @@ Key commands:
 - `kb add --title "..." --category <cat> --tags "..." --content "..."` — store
 - `kb update <id> --append "..."` — update
 - `kb lint` — check health
+- `kb log` — recent activity
+- `kb log add --op <type> --details "..."` — record session summary
 
-Rules: search before adding, cross-link related docs, sync related knowledge after mutations.
+Rules:
+- Search before adding, cross-link related docs, sync related knowledge after mutations.
+- Discuss key takeaways with user before ingesting new sources.
+- Resolve contradictions using recency → authority → specificity.
+- Log session summaries after ingest/lint.

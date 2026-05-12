@@ -1,6 +1,6 @@
 # kb — Agent Instructions
 
-You have access to a persistent wiki via the `kb` CLI or HTTP API. Use it to store, retrieve, and manage knowledge that persists across conversations.
+You have access to a persistent wiki via the `kb` CLI. Use it to store, retrieve, and manage knowledge that persists across conversations.
 
 ## When to use
 
@@ -33,41 +33,25 @@ kb toc                           # show table of contents
 kb schema                        # show wiki schema
 kb schema update                 # regenerate schema
 kb log                           # recent activity
+kb log add --op <type> --details "..."  # record agent session entry
 kb wiki list                     # list wikis
 kb wiki use <name>               # set default wiki
 ```
 
-### HTTP API (when server is running via `kb serve`)
+### Remote wikis
 
-Base URL: `http://localhost:4141` (default port). `GET /api` lists all endpoints.
+Connect to remote kb servers to use shared team knowledge:
 
-```
-GET  /api/health                      → { status: "ok" }
-GET  /api/search?q=<query>&limit=10&wiki=<name>&mode=hybrid|fts|vec
-GET  /api/read/<id>?wiki=<name>&lines=<range>&format=json
-POST /api/docs                        body: { title, category, tags[], body, wiki? }
-PUT  /api/docs/<id>                   body: { title?, category?, tags?, body?, append?, wiki? }
-DELETE /api/docs/<id>?wiki=<name>
-GET  /api/docs?wiki=<name>&category=<c>&tag=<t>
-GET  /api/list?wiki=<name>            (alias for /api/docs)
-GET  /api/docs/<id>/related?wiki=<name>&limit=10
-POST /api/docs/<id>/rename            body: { to: "<new-id>", wiki? }
-GET  /api/categories?wiki=<name>
-GET  /api/lint?wiki=<name>
-POST /api/lint/fix?wiki=<name>
-POST /api/reindex?wiki=<name>
-GET  /api/toc?wiki=<name>
-GET  /api/schema?wiki=<name>
-POST /api/schema?wiki=<name>
-GET  /api/log?wiki=<name>&limit=20
-GET  /api/wiki
-POST /api/wiki                        body: { name }
-PUT  /api/wiki/use/<name>
-DELETE /api/wiki/<name>
-GET  /api/skill?workflow=<name>
+```bash
+kb remote add <name> --url <url> [--pat <token>]   # register a remote KB
+kb remote connect <name>                            # test connection
+kb remote wikis <name>                              # list available wikis
+kb remote attach <kb> <wiki> [--alias <local-name>] # attach for local use
+kb remote detach <name>                             # detach
+kb wiki list                                        # shows both local and remote
 ```
 
-Note: content fields accept `body`, `text`, or `content` as field name (all equivalent).
+Once attached, remote wikis work identically to local ones — all commands (search, read, add, update, delete, lint) route transparently via `--wiki <name>`.
 
 ## Key principles
 

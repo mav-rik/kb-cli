@@ -1,6 +1,8 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
+import type { WikiRef } from '../types/wiki-ref.js'
+import { RemoteConfigService } from './remote-config.service.js'
 
 export interface KbCliConfig {
   defaultWiki: string
@@ -19,10 +21,12 @@ export interface CwdConfig {
 export class ConfigService {
   private configPath: string
   private cwdConfig: CwdConfig | null = null
+  private remoteConfig: RemoteConfigService
 
   constructor() {
     this.configPath = path.join(this.getDataDir(), 'config.json')
     this.cwdConfig = this.loadCwdConfig()
+    this.remoteConfig = new RemoteConfigService(this.getDataDir())
   }
 
   getDataDir(): string {
@@ -53,10 +57,25 @@ export class ConfigService {
     return null
   }
 
-  resolveWiki(explicit?: string): string {
-    if (explicit) return explicit
-    if (this.cwdConfig?.wiki) return this.cwdConfig.wiki
-    return this.get('defaultWiki')
+  resolveWiki(explicit?: string): WikiRef {
+    const name = explicit || this.cwdConfig?.wiki || this.get('defaultWiki')
+    const remoteInfo = this.remoteConfig.resolveRemoteWiki(name)
+    if (remoteInfo) {
+      return {
+        type: 'remote',
+        name: remoteInfo.wikiName,
+        localAlias: name,
+        remoteKb: remoteInfo.remoteName,
+        url: remoteInfo.url,
+        pat: remoteInfo.pat,
+      }
+    }
+    return { type: 'local', name }
+  }
+
+  resolveWikiName(explicit?: string): string {
+    const ref = this.resolveWiki(explicit)
+    return ref.name
   }
 
   loadConfig(): KbCliConfig {

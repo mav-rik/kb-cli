@@ -9,7 +9,7 @@ Inspired by [Karpathy's LLM-wiki pattern](https://gist.github.com/karpathy/442a6
 - Stores knowledge as interlinked Markdown files (source of truth)
 - SQLite for metadata indexing, FTS5 for keyword search, sqlite-vec for semantic search
 - Local embeddings via all-MiniLM-L6-v2 (no cloud, no API keys, runs on Apple Silicon)
-- CLI + HTTP API — usable by any AI agent that can run shell commands or make HTTP calls
+- CLI for agents + HTTP transport for remote KB access
 - Multiple isolated wikis per user (work, personal, research, etc.)
 - Agent skill system with workflows for ingestion, search, updates, and maintenance
 
@@ -91,40 +91,51 @@ kb wiki create/list/use/delete/info   Manage wikis
 kb config get/set/list   Configuration
 kb skill [workflow]      Show agent instructions (ingest/search/update/lint)
 kb setup                 Install agent integrations
-kb serve [--port 4141]   Start HTTP API server
+kb serve [--port 4141 --token <secret>]  Start server for remote access
+kb remote add/remove/list/connect        Manage remote KBs
+kb remote attach/detach/wikis            Manage remote wiki access
 ```
 
-## HTTP API
+## Remote KBs
+
+Connect to remote kb instances (servers running `kb serve`) to access shared team knowledge.
 
 ```bash
-kb serve --port 4141
+# On the server machine
+kb serve --port 4141 --token my-secret
+
+# On your machine
+kb remote add team --url http://server:4141 --pat my-secret
+kb remote connect team                     # verify connection
+kb remote wikis team                       # list available wikis
+kb remote attach team docs                 # attach "docs" wiki locally
+kb remote attach team notes --alias tnotes # attach with alias (avoids name conflicts)
+
+# Now use it like any local wiki
+kb search "query" --wiki docs
+kb add --title "..." --wiki docs --content "..."
+kb wiki list                               # shows local + remote wikis
+
+# Disconnect
+kb remote detach docs
+kb remote remove team                      # unregisters (remote data preserved)
 ```
 
-Starts a REST API mirroring all CLI commands. All endpoints under `/api/`.
+Remote wikis are transparent — all commands work the same whether the target wiki is local or remote. Use `--wiki <name>` to target a specific one, or set it as default with `kb wiki use <name>`.
 
-```
-GET  /api/search?q=...&wiki=...&limit=10
-GET  /api/read/<filename>?wiki=...&lines=...
-POST /api/docs              { title, category, tags[], content }
-PUT  /api/docs/<id>         { title?, category?, tags?, content?, append? }
-DELETE /api/docs/<id>?wiki=...
-GET  /api/docs?wiki=...&category=...
-GET  /api/docs/<id>/related?wiki=...
-POST /api/docs/<id>/rename  { newId }
-GET  /api/wiki              list wikis
-POST /api/wiki              { name }
-GET  /api/lint?wiki=...
-POST /api/reindex?wiki=...
-GET  /api/schema?wiki=...
-```
+### Managing remote wikis
 
-**No authentication.** The API is intended for local use — bind to localhost only in production setups. Do not expose to the network without adding your own auth layer.
+```bash
+kb remote create-wiki team new-wiki        # create wiki on remote
+kb remote delete-wiki team old-wiki --force # delete on remote (destructive!)
+```
 
 ## How it works
 
 ```
 ~/.kb/
 ├── config.json              global config
+├── remotes.json             remote KB registrations
 ├── .models/                 cached embedding model
 ├── my-wiki/
 │   ├── docs/                markdown files (flat, no subdirs)

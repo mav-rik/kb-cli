@@ -60,7 +60,13 @@ Read the doc and its top related docs. Look for:
 - Numbers, dates, or facts that disagree
 - Outdated claims superseded by newer information
 
-Fix by updating the stale doc or merging the two into one.
+#### Resolving contradictions
+
+1. **Check the log**: `kb log` — which doc was updated more recently? Recent entries reflect newer sources.
+2. **Check authority**: primary sources (official docs, direct observation) beat secondary sources (blog posts, summaries).
+3. **Check specificity**: specific, concrete claims supersede vague or general ones.
+4. **When clear winner exists**: update the stale doc, noting what changed and why.
+5. **When unclear**: merge into one authoritative page, or flag both with "⚠️ Unresolved conflict — needs user verification" and report to user.
 
 ### Step 2: Find missing pages
 
@@ -100,7 +106,20 @@ Look for:
 kb log --limit 50
 ```
 
-Look for docs that haven't been updated in a long time but cover evolving topics. Read them and check if the information is still current.
+Look for docs that haven't been updated in a long time but cover evolving topics.
+
+Cross-reference with document metadata:
+```bash
+kb read <filename> --meta
+```
+
+A doc is likely stale if:
+- Its `updated` date is old relative to other docs in the same category
+- It covers a fast-moving topic (tools, APIs, infrastructure) but hasn't been touched
+- Related docs have been updated since, suggesting the landscape changed
+- The log shows recent activity around the same topic but this doc wasn't touched
+
+Read stale candidates and check if the information is still current. Update or flag for user review.
 
 ### Step 6: Identify knowledge gaps
 
@@ -109,16 +128,28 @@ Review the KB holistically. Look for:
 - Areas where the KB has depth in one aspect but not related ones (e.g., detailed on "how" but missing "why")
 - Questions the user might ask that the KB can't answer well
 
-**Suggest sources to fill gaps.** For each gap identified:
-- What specific information is missing?
-- What kind of source would fill it? (article, documentation, conversation with someone, experiment)
-- If applicable, suggest a web search query that would find relevant material
+**Suggest sources to fill gaps.** For each gap identified, produce actionable recommendations:
 
-Report to user: "The KB has gaps in X, Y, Z. Suggested sources to investigate: ..."
+| Gap | What's missing | Suggested source type | Search query |
+|-----|---------------|----------------------|--------------|
+| Example | How auth tokens are rotated | Internal documentation | `"token rotation" site:docs.internal.com` |
+
+Always provide:
+- A concrete description of what information is missing
+- What kind of source would fill it (docs, article, conversation, experiment, code reading)
+- A ready-to-use web search query or internal resource to check
 
 This turns lint from a passive health check into an active growth driver for the KB.
 
-### Step 7: Update schema
+### Step 7: Log the session
+
+Record what was found and fixed:
+
+```bash
+kb log add --op lint --details "Semantic review: found X contradictions, Y stale docs, Z gaps. Fixed: [summary of changes]"
+```
+
+### Step 8: Update schema
 
 After any semantic review session:
 ```bash

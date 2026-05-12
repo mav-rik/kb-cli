@@ -6,9 +6,7 @@ import { toDocId, toFilename } from '../utils/slug.js'
 @Controller()
 export class SearchController {
   private get config() { return services.config }
-  private get searchService() { return services.search }
-  private get storage() { return services.storage }
-  private get workflow() { return services.docWorkflow }
+  private get gateway() { return services.gateway }
 
   @Cli('search/:query')
   @Description('Search documents (hybrid semantic + keyword)')
@@ -20,10 +18,11 @@ export class SearchController {
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string | object> {
     const parsedLimit = limit ? parseInt(limit, 10) : 10
-    const resolvedKb = this.config.resolveWiki(wiki)
+    const ref = this.config.resolveWiki(wiki)
+    const ops = this.gateway.getOps(ref)
     const searchMode = (mode === 'fts' || mode === 'vec') ? mode : 'hybrid' as SearchMode
 
-    const results = await this.searchService.search(resolvedKb, query, parsedLimit, searchMode)
+    const results = await ops.search(query, parsedLimit, searchMode)
 
     if (results.length === 0) {
       return 'No results found.'
@@ -45,16 +44,11 @@ export class SearchController {
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string | object> {
     const parsedLimit = limit ? parseInt(limit, 10) : 10
-    const resolvedKb = this.config.resolveWiki(wiki)
-    const filename = toFilename(id)
-    const docId = toDocId(filename)
+    const ref = this.config.resolveWiki(wiki)
+    const ops = this.gateway.getOps(ref)
+    const docId = toDocId(toFilename(id))
 
-    if (!this.storage.docExists(resolvedKb, filename)) {
-      return `Error: Document "${filename}" not found in wiki "${resolvedKb}".`
-    }
-
-    const scored = await this.workflow.findRelated(resolvedKb, docId, filename, parsedLimit)
-    const results = await this.searchService.buildResults(resolvedKb, scored)
+    const results = await ops.related(docId, parsedLimit)
 
     if (results.length === 0) {
       return 'No related documents found.'

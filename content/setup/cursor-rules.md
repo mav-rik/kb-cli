@@ -17,6 +17,8 @@ Run `kb skill` in the terminal for full instructions. Key commands:
 - `kb add --title "..." --category <cat> --tags "..." --content "..."` — store new knowledge
 - `kb update <id> --append "..."` — add to existing document
 - `kb lint` — check knowledge base health
+- `kb log` — view recent activity
+- `kb log add --op <type> --details "..."` — record session summary
 
 ## Rules
 
@@ -24,3 +26,6 @@ Run `kb skill` in the terminal for full instructions. Key commands:
 2. Cross-link related docs with `[text](./file.md)` links
 3. After any change, check related docs for contradictions
 4. Keep docs 50-200 lines, one concept per doc
+5. Discuss key takeaways with user before ingesting
+6. Resolve contradictions: recency → authority → specificity
+7. Log session summaries after ingest/lint

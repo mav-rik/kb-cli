@@ -8,6 +8,8 @@ export class WikiController {
   private get config() { return services.config }
   private get wikiMgmt() { return services.wikiManagement }
 
+  private get remoteConfig() { return services.remoteConfig }
+
   @Cli('create/:name')
   @Description('Create a new wiki')
   create(@Param('name') name: string) {
@@ -30,30 +32,54 @@ export class WikiController {
   @Description('List all wikis')
   list() {
     const wikis = this.wikiMgmt.list()
-    if (wikis.length === 0) {
-      return 'No wikis found.'
+    const lines: string[] = []
+
+    if (wikis.length > 0) {
+      const dataDir = this.config.getDataDir()
+      lines.push('Local wikis:')
+      lines.push('Name         | Docs | DB Size  | Docs Size')
+      lines.push('-------------|------|----------|----------')
+
+      for (const name of wikis) {
+        const docsDir = path.join(dataDir, name, 'docs')
+        const dbPath = path.join(dataDir, name, 'index.db')
+
+        let docCount = 0
+        let docsSize = 0
+        if (fs.existsSync(docsDir)) {
+          const files = fs.readdirSync(docsDir).filter(f => f.endsWith('.md'))
+          docCount = files.length
+          for (const f of files) {
+            docsSize += fs.statSync(path.join(docsDir, f)).size
+          }
+        }
+
+        const dbSize = fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0
+        lines.push(`${name.padEnd(12)} | ${String(docCount).padStart(4)} | ${formatBytes(dbSize).padStart(8)} | ${formatBytes(docsSize)}`)
+      }
     }
 
-    const dataDir = this.config.getDataDir()
-    const lines = ['Name         | Docs | DB Size  | Docs Size', '-------------|------|----------|----------']
-
-    for (const name of wikis) {
-      const docsDir = path.join(dataDir, name, 'docs')
-      const dbPath = path.join(dataDir, name, 'index.db')
-
-      let docCount = 0
-      let docsSize = 0
-      if (fs.existsSync(docsDir)) {
-        const files = fs.readdirSync(docsDir).filter(f => f.endsWith('.md'))
-        docCount = files.length
-        for (const f of files) {
-          docsSize += fs.statSync(path.join(docsDir, f)).size
-        }
+    const remotes = this.remoteConfig.listRemotes()
+    const allAttached: { localName: string; remoteName: string; wikiName: string }[] = []
+    const config = this.remoteConfig.load()
+    for (const [remoteName, remote] of Object.entries(config.remotes)) {
+      for (const [wikiName, entry] of Object.entries(remote.attachedWikis)) {
+        allAttached.push({ localName: entry.alias || wikiName, remoteName, wikiName })
       }
+    }
 
-      const dbSize = fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0
+    if (allAttached.length > 0) {
+      if (lines.length > 0) lines.push('')
+      lines.push('Remote wikis:')
+      lines.push('Local Name   | Remote KB    | Wiki Name')
+      lines.push('-------------|-------------|----------')
+      for (const a of allAttached) {
+        lines.push(`${a.localName.padEnd(12)} | ${a.remoteName.padEnd(11)} | ${a.wikiName}`)
+      }
+    }
 
-      lines.push(`${name.padEnd(12)} | ${String(docCount).padStart(4)} | ${formatBytes(dbSize).padStart(8)} | ${formatBytes(docsSize)}`)
+    if (lines.length === 0) {
+      return 'No wikis found.'
     }
 
     return lines.join('\n')

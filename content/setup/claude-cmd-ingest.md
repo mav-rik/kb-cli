@@ -1,1 +1,1 @@
-Store information in the wiki. Run `kb skill ingest` for detailed instructions, then follow the workflow to ingest the user's input.
+Store information in the wiki. First, briefly discuss key takeaways with the user (what to emphasize, potential conflicts). Then run `kb skill ingest` for detailed instructions and follow the workflow to ingest the user's input.

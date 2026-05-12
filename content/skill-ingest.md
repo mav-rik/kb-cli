@@ -2,6 +2,15 @@
 
 Follow these steps when receiving new information to store.
 
+## Step 0: Discuss with user
+
+Before writing anything to the wiki, briefly discuss key takeaways:
+- What are the most important points in this source?
+- Are there claims that might conflict with existing knowledge?
+- What should be emphasized or de-emphasized?
+
+Skip only if the user explicitly asks for hands-off ingestion (e.g. batch processing).
+
 ## Determine scale
 
 Before starting, assess the input:
@@ -14,74 +23,39 @@ Before starting, assess the input:
 
 ### Step 1: Search for existing knowledge
 
-**CLI:**
 ```bash
 kb search "<key concepts from the new information>"
-```
-
-**API:**
-```
-GET /api/search?q=<key concepts>&limit=10&wiki=<name>
 ```
 
 If a highly relevant doc exists (score > 0.03), go to Step 2a. Otherwise Step 2b.
 
 ### Step 2a: Update existing document
 
-**CLI:**
 ```bash
 kb read <filename>
 ```
 
-**API:**
-```
-GET /api/read/<filename>?wiki=<name>
-```
-
 Review the existing content. Then either:
 
-**CLI:**
 - Append new info: `kb update <id> --append "\n\n## New Section\n\ncontent..."`
 - Replace with merged content: `kb update <id> --content "full merged content"`
-
-**API:**
-```
-PUT /api/docs/<id>
-body: { "append": "\n\n## New Section\n\ncontent..." }
-PUT /api/docs/<id>
-body: { "content": "full merged content" }
-```
 
 ### Step 2b: Create new document
 
 Check existing categories and schema:
 
-**CLI:**
 ```bash
 kb categories
 kb schema
 ```
 
-**API:**
-```
-GET /api/categories?wiki=<name>
-GET /api/schema?wiki=<name>
-```
-
 Create the document:
 
-**CLI:**
 ```bash
 kb add --title "Descriptive Title" --category <category> --tags "tag1,tag2" --content "content with [links](./related-doc.md)"
 ```
 
-**API:**
-```
-POST /api/docs
-body: { "title": "Descriptive Title", "category": "<category>", "tags": ["tag1","tag2"], "content": "content with [links](./related-doc.md)" }
-```
-
-For large content, use `--file <path>` or pipe via `--stdin` (CLI only).
+For large content, use `--file <path>` or pipe via `--stdin`.
 
 ---
 
@@ -108,7 +82,6 @@ For each identified element, decide:
 
 For each page to create or update:
 
-**CLI:**
 ```bash
 # Check if it exists
 kb search "<entity/concept name>"
@@ -121,58 +94,26 @@ kb update <id> --append "\n\n## From [Source Title]\n\nnew information..."
 kb add --title "Entity Name" --category <category> --tags "..." --content "..."
 ```
 
-**API:**
-```
-GET /api/search?q=<entity/concept name>&limit=10&wiki=<name>
-
-GET /api/read/<filename>?wiki=<name>
-PUT /api/docs/<id>
-body: { "append": "\n\n## From [Source Title]\n\nnew information..." }
-
-POST /api/docs
-body: { "title": "Entity Name", "category": "<category>", "tags": ["..."], "content": "..." }
-```
-
 ### Step 4D: Create a summary page (optional)
 
 For substantial sources, create a summary page that links to all the pages it touched:
 
-**CLI:**
 ```bash
 kb add --title "Summary: Source Title" --category summaries --tags "summary,source-name" --content "## Key takeaways\n\n- Point 1 (see [Entity](./entity.md))\n- Point 2 (see [Concept](./concept.md))\n..."
-```
-
-**API:**
-```
-POST /api/docs
-body: { "title": "Summary: Source Title", "category": "summaries", "tags": ["summary","source-name"], "content": "## Key takeaways\n\n..." }
 ```
 
 ### Step 5D: Cross-link everything
 
 Every page created or updated should link to related pages. Use `kb related <id>` to find candidates:
 
-**CLI:**
 ```bash
 kb related <new-doc-id>
 ```
 
-**API:**
-```
-GET /api/docs/<new-doc-id>/related?wiki=<name>&limit=10
-```
-
 Update related docs to link back:
 
-**CLI:**
 ```bash
 kb update <related-id> --append "\n\nSee also: [New Topic](./new-topic.md)"
-```
-
-**API:**
-```
-PUT /api/docs/<related-id>
-body: { "append": "\n\nSee also: [New Topic](./new-topic.md)" }
 ```
 
 ---
@@ -183,40 +124,40 @@ body: { "append": "\n\nSee also: [New Topic](./new-topic.md)" }
 
 Search for docs that might now contain outdated or contradictory information:
 
-**CLI:**
 ```bash
 kb search "<key facts from new content>"
 ```
 
-**API:**
-```
-GET /api/search?q=<key facts>&limit=10&wiki=<name>
-```
+Read each result. If any contain stale info, resolve the conflict:
 
-Read each result. If any contain stale info, update them.
+#### Conflict resolution protocol
+
+When new information contradicts existing wiki content:
+
+1. **Check recency**: run `kb log` — which doc was updated more recently? Newer sources generally win.
+2. **Check authority**: is one source more authoritative than the other? (primary vs secondary, official docs vs blog post)
+3. **Check specificity**: a specific claim ("rotation period is 30 days") supersedes a general one ("credentials are rotated regularly").
+4. **If unclear**: flag the contradiction explicitly in both docs with a note like "⚠️ Conflicts with [other-doc](./other-doc.md) — needs verification" and ask the user.
+5. **When updating**: don't just overwrite — note what changed and why (e.g., "Updated from 90→30 days per [source]").
+
+### Log the session
+
+After completing the ingest, record a summary entry:
+
+```bash
+kb log add --op ingest --details "Ingested [source description]: created X pages, updated Y pages. Key insight: [one-line summary]"
+```
 
 ### Update schema
 
-**CLI:**
 ```bash
 kb schema update
 ```
 
-**API:**
-```
-POST /api/schema?wiki=<name>
-```
-
 ### Verify
 
-**CLI:**
 ```bash
 kb lint --fix
-```
-
-**API:**
-```
-POST /api/lint/fix?wiki=<name>
 ```
 
 Should report no broken links or drift.
@@ -244,4 +185,3 @@ Should report no broken links or drift.
 - **Attribute when relevant**: "According to [source], ..." — but don't over-cite
 - **Keep it current**: write as if the page will be read months later. Avoid "recently" or "last week" — use dates.
 - **Front-load**: put the most important information first. Details and nuance below.
-

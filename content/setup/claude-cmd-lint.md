@@ -1,1 +1,1 @@
-Check and maintain wiki health. Run `kb skill lint` for detailed instructions, then follow the workflow.
+Check and maintain wiki health. Run `kb skill lint` for detailed instructions, then follow the workflow. Remember to resolve contradictions (recency → authority → specificity) and log session results with `kb log add`.

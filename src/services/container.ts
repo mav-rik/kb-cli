@@ -11,6 +11,8 @@ import { DocWorkflowService } from './doc-workflow.service.js'
 import { WikiManagementService } from './wiki-management.service.js'
 import { ActivityLogService } from './activity-log.service.js'
 import { SchemaService } from './schema.service.js'
+import { RemoteConfigService } from './remote-config.service.js'
+import { WikiGatewayService } from './wiki-gateway.service.js'
 
 class ServiceContainer {
   readonly config = new ConfigService()
@@ -26,6 +28,8 @@ class ServiceContainer {
   readonly wikiManagement: WikiManagementService
   readonly activityLog: ActivityLogService
   readonly schema: SchemaService
+  readonly remoteConfig: RemoteConfigService
+  readonly gateway: WikiGatewayService
 
   constructor() {
     this.index = new IndexService(this.config)
@@ -38,6 +42,15 @@ class ServiceContainer {
     this.wikiManagement = new WikiManagementService(this.config)
     this.activityLog = new ActivityLogService(this.config)
     this.schema = new SchemaService(this.config, this.index, this.storage)
+    this.remoteConfig = new RemoteConfigService(this.config.getDataDir())
+    this.gateway = new WikiGatewayService({
+      storage: this.storage,
+      search: this.search,
+      index: this.index,
+      workflow: this.docWorkflow,
+      schema: this.schema,
+      activityLog: this.activityLog,
+    })
   }
 }
 
