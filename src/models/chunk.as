@@ -4,7 +4,6 @@ export interface Chunk {
     @meta.id
     id: string
 
-    @db.column.renamed 'doc_id'
     @db.index.plain 'idx_chunk_doc'
     docId: string
 
@@ -15,6 +14,5 @@ export interface Chunk {
 
     position: number
 
-    @db.column.renamed 'content_hash'
     contentHash: string
 }

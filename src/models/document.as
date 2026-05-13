@@ -12,17 +12,13 @@ export interface Document {
     @db.json
     tags?: string[]
 
-    @db.column.renamed 'file_path'
     filePath: string
 
-    @db.column.renamed 'content_hash'
     contentHash: string
 
-    @db.column.renamed 'created_at'
     @db.default.now
     createdAt?: number.timestamp
 
-    @db.column.renamed 'updated_at'
     @db.default.now
     updatedAt?: number.timestamp
 
