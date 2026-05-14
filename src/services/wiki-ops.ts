@@ -38,9 +38,6 @@ export interface DocInput {
   suppressLint?: string[]
 }
 
-/** Back-compat alias — UpdatePatch is now DocInput. */
-export type UpdatePatch = DocInput
-
 export interface WriteOpts {
   dryRun?: boolean
 }
@@ -579,10 +576,21 @@ export function composeDocInput(args: {
     input.body = args.rawBody
   }
   if (args.appendBody !== undefined) input.appendBody = args.appendBody
-  if (args.overrides) {
-    // Drop undefined keys from overrides so they don't blank out file values.
-    for (const k of Object.keys(args.overrides) as (keyof DocInput)[]) {
-      if (args.overrides[k] !== undefined) (input as any)[k] = args.overrides[k]
+  // Explicit per-field overlay — matches the house pattern used by
+  // `mergeFrontmatter`. Conditional spreads drop undefined keys so they
+  // don't blank out values supplied by the parsed file.
+  const o = args.overrides
+  if (o) {
+    input = {
+      ...input,
+      ...(o.title !== undefined && { title: o.title }),
+      ...(o.category !== undefined && { category: o.category }),
+      ...(o.tags !== undefined && { tags: o.tags }),
+      ...(o.body !== undefined && { body: o.body }),
+      ...(o.appendBody !== undefined && { appendBody: o.appendBody }),
+      ...(o.importantSections !== undefined && { importantSections: o.importantSections }),
+      ...(o.suppressMergeWarn !== undefined && { suppressMergeWarn: o.suppressMergeWarn }),
+      ...(o.suppressLint !== undefined && { suppressLint: o.suppressLint }),
     }
   }
   return input
