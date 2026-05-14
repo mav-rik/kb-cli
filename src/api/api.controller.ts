@@ -1,11 +1,25 @@
-import * as fs from 'node:fs'
-import * as path from 'node:path'
 import { Controller, Param } from 'moost'
-import { Get, Post, Put, Delete, Body, Query, SetStatus } from '@moostjs/event-http'
+import { Get, Post, Put, Delete, Body, Query, SetStatus, HttpError } from '@moostjs/event-http'
 import { services } from '../services/container.js'
-import { toFilename, canonicalize, parseLineRange } from '../utils/slug.js'
+import { parseLineRange } from '../utils/slug.js'
 import { readContent } from '../utils/content.js'
-import { LocalWikiOps } from '../services/wiki-ops.js'
+import { LocalWikiOps, DocNotFoundError } from '../services/wiki-ops.js'
+
+function httpErrorFor(err: any): HttpError {
+  // DocNotFoundError → 404 with suggestions in the body so clients can
+  // surface them without re-running `kb resolve`. `HttpError.body` overwrites
+  // `error` with the HTTP status name; our text lives in `message`.
+  if (err instanceof DocNotFoundError) {
+    return new HttpError(404, {
+      message: err.message,
+      kind: 'doc-not-found',
+      id: err.id,
+      filename: err.filename,
+      suggestions: err.suggestions,
+    } as never)
+  }
+  return new HttpError(500, err?.message ?? 'Internal error')
+}
 
 function sliceLines(content: string, lines?: string): string {
   if (!lines) return content
@@ -82,29 +96,18 @@ export class ApiController {
 
   @Get('read/:filename')
   async read(@Param('filename') filename: string, @Query('wiki') wiki: string, @Query('lines') lines: string, @Query('format') format: string, @Query('meta') meta: string, @Query('links') links: string) {
-    const resolvedWiki = this.config.resolveWikiName(wiki)
-    const targetPath = canonicalize(filename).filename
-
-    if (!this.storage.docExists(resolvedWiki, targetPath)) {
-      return { error: `Document "${targetPath}" not found in wiki "${resolvedWiki}".` }
+    const wikiName = this.config.resolveWikiName(wiki)
+    try {
+      const doc = await this.localOps(wikiName).readDoc(filename)
+      if (meta === 'true' || meta === '1') return doc.frontmatter
+      if (links === 'true' || links === '1') return doc.links
+      if (format === 'json') {
+        return { meta: doc.frontmatter, content: sliceLines(doc.body, lines), links: doc.links }
+      }
+      return sliceLines(await this.localOps(wikiName).readRaw(filename), lines)
+    } catch (err: any) {
+      throw httpErrorFor(err)
     }
-
-    const doc = this.storage.readDoc(resolvedWiki, targetPath)
-
-    if (meta === 'true' || meta === '1') {
-      return doc.frontmatter
-    }
-
-    if (links === 'true' || links === '1') {
-      return doc.links
-    }
-
-    if (format === 'json') {
-      return { meta: doc.frontmatter, content: sliceLines(doc.body, lines), links: doc.links }
-    }
-
-    // Default: return raw markdown
-    return sliceLines(this.storage.readRaw(resolvedWiki, targetPath), lines)
   }
 
   @Get('resolve/:input')
@@ -115,14 +118,12 @@ export class ApiController {
 
   @Get('read-slice/:filename')
   async readSlice(@Param('filename') filename: string, @Query('wiki') wiki: string, @Query('from') from: string, @Query('to') to: string) {
-    const resolvedWiki = this.config.resolveWikiName(wiki)
-    const targetPath = canonicalize(filename).filename
-
-    if (!this.storage.docExists(resolvedWiki, targetPath)) {
-      return { error: `Document "${targetPath}" not found in wiki "${resolvedWiki}".` }
+    const wikiName = this.config.resolveWikiName(wiki)
+    try {
+      return await this.localOps(wikiName).readSlice(filename, parseInt(from, 10) || 1, parseInt(to, 10) || Infinity)
+    } catch (err: any) {
+      throw httpErrorFor(err)
     }
-
-    return this.storage.readSlice(resolvedWiki, targetPath, parseInt(from, 10) || 1, parseInt(to, 10) || Infinity)
   }
 
   // ─── Documents CRUD ───────────────────────────────────────────────────────
@@ -144,7 +145,7 @@ export class ApiController {
     try {
       return await this.localOps(wikiName).addDoc(body.title, body.category, body.tags || [], content, { dryRun: body.dryRun })
     } catch (err: any) {
-      return { error: err.message }
+      throw httpErrorFor(err)
     }
   }
 
@@ -171,7 +172,7 @@ export class ApiController {
     try {
       return await this.localOps(wikiName).updateDoc(id, patch, { dryRun: body.dryRun })
     } catch (err: any) {
-      return { error: err.message }
+      throw httpErrorFor(err)
     }
   }
 
@@ -190,61 +191,37 @@ export class ApiController {
   @Delete('docs/:id')
   async deleteDoc(@Param('id') id: string, @Query('wiki') wiki: string) {
     const wikiName = this.config.resolveWikiName(wiki)
-    const { id: docId, filename } = canonicalize(id)
-
-    if (!this.storage.docExists(wikiName, filename)) {
-      return { error: `Document "${filename}" not found in wiki "${wikiName}".` }
+    try {
+      return await this.localOps(wikiName).deleteDoc(id)
+    } catch (err: any) {
+      throw httpErrorFor(err)
     }
-
-    const backlinks = await this.index.getLinksTo(wikiName, docId)
-    const warnings: string[] = []
-    if (backlinks.length > 0) {
-      const sources = backlinks.map((l) => toFilename(l.fromId))
-      warnings.push(`${backlinks.length} document(s) have broken links to ${filename}: ${sources.join(', ')}`)
-    }
-
-    this.storage.deleteDoc(wikiName, filename)
-    await this.workflow.removeFromIndex(wikiName, docId)
-
-    return { deleted: filename, warnings }
   }
 
   @Get('docs/:id/related')
   @Get('related/:id')
   async related(@Param('id') id: string, @Query('wiki') wiki: string, @Query('limit') limit: string) {
-    const resolvedWiki = this.config.resolveWikiName(wiki)
+    const wikiName = this.config.resolveWikiName(wiki)
     const parsedLimit = limit ? parseInt(limit, 10) : 10
-    const { id: docId, filename } = canonicalize(id)
-
-    if (!this.storage.docExists(resolvedWiki, filename)) {
-      return { error: `Document "${filename}" not found in wiki "${resolvedWiki}".` }
+    try {
+      return await this.localOps(wikiName).related(id, parsedLimit)
+    } catch (err: any) {
+      throw httpErrorFor(err)
     }
-
-    const scored = await this.workflow.findRelated(resolvedWiki, docId, filename, parsedLimit)
-    return this.searchService.buildRelatedResults(resolvedWiki, scored)
   }
 
   @Post('docs/:id/rename')
   async renameDoc(@Param('id') id: string, @Body() body: { newId?: string; to?: string; name?: string; wiki?: string }) {
     const wikiName = this.config.resolveWikiName(body.wiki)
-    const { id: oldId, filename: oldFilename } = canonicalize(id)
     const rawNewId = body.newId || body.to || body.name
     if (!rawNewId) {
-      return { error: 'Missing "newId" (or "to") in request body.' }
+      throw new HttpError(400, 'Missing "newId" (or "to") in request body.')
     }
-    const { id: newId, filename: newFilename } = canonicalize(rawNewId)
-
-    if (!this.storage.docExists(wikiName, oldFilename)) {
-      return { error: `Document "${oldFilename}" not found in wiki "${wikiName}".` }
+    try {
+      return await this.localOps(wikiName).rename(id, rawNewId)
+    } catch (err: any) {
+      throw httpErrorFor(err)
     }
-
-    if (this.storage.docExists(wikiName, newFilename)) {
-      return { error: `Document "${newFilename}" already exists in wiki "${wikiName}".` }
-    }
-
-    const linksUpdated = await this.workflow.rename(wikiName, oldId, newId, oldFilename, newFilename)
-
-    return { oldId, newId, linksUpdated }
   }
 
   @Get('docs')
@@ -272,28 +249,11 @@ export class ApiController {
   }
 
   @Get('wiki/:name')
-  wikiInfo(@Param('name') name: string) {
+  async wikiInfo(@Param('name') name: string) {
     if (!this.wikiMgmt.exists(name)) {
-      return { error: `Wiki "${name}" does not exist.` }
+      throw new HttpError(404, `Wiki "${name}" does not exist.`)
     }
-    const docsDir = this.storage.getDocsDir(name)
-    let sizeBytes = 0
-    let lastMs = 0
-    let files: string[] = []
-    try {
-      files = fs.readdirSync(docsDir).filter((f) => f.endsWith('.md'))
-      for (const f of files) {
-        const stat = fs.statSync(path.join(docsDir, f))
-        sizeBytes += stat.size
-        if (stat.mtimeMs > lastMs) lastMs = stat.mtimeMs
-      }
-    } catch {}
-    return {
-      name,
-      docCount: files.length,
-      sizeBytes,
-      lastUpdated: lastMs ? new Date(lastMs).toISOString() : null,
-    }
+    return this.localOps(name).info()
   }
 
   @Post('wiki')
@@ -337,7 +297,7 @@ export class ApiController {
     try {
       return await this.localOps(wikiName).reindexDoc(id)
     } catch (err: any) {
-      return { error: err.message }
+      throw httpErrorFor(err)
     }
   }
 

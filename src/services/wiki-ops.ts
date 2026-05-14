@@ -4,6 +4,7 @@ import type { SearchMode, SearchResult, RelatedResult } from './search.service.j
 import type { LintIssue, ReindexResult } from './doc-workflow.service.js'
 import type { ParsedDoc, DocFrontmatter, ParserService } from './parser.service.js'
 import type { RemoteClient } from './remote-client.js'
+import { RemoteError } from './remote-client.js'
 import type { StorageService } from './storage.service.js'
 import type { SearchService } from './search.service.js'
 import type { IndexService } from './index.service.js'
@@ -51,6 +52,36 @@ export interface WriteResult {
   id: string
   filename: string
   issues: LintIssue[]
+}
+
+export function formatDocNotFound(opts: {
+  kb: string
+  input: string
+  id?: string
+  filename?: string
+  suggestions: string[]
+}): string {
+  const lines = [`Document not found in wiki "${opts.kb}": ${opts.input}`]
+  if (opts.id && opts.id !== opts.input) lines.push(`  Canonical id: ${opts.id} (${opts.filename})`)
+  if (opts.suggestions.length > 0) {
+    lines.push(`  Did you mean:`)
+    for (const s of opts.suggestions) lines.push(`    - ${s}`)
+  }
+  lines.push(`  Run \`kb list\` to see all docs, or \`kb resolve ${opts.input}\` for fuzzy-match details.`)
+  return lines.join('\n')
+}
+
+export class DocNotFoundError extends Error {
+  name = 'DocNotFoundError'
+  constructor(
+    public kb: string,
+    public input: string,
+    public id: string,
+    public filename: string,
+    public suggestions: string[],
+  ) {
+    super(formatDocNotFound({ kb, input, id, filename, suggestions }))
+  }
 }
 
 export interface ResolveResult {
@@ -102,6 +133,21 @@ export interface LocalServices {
 export class LocalWikiOps implements WikiOps {
   constructor(private kb: string, private svc: LocalServices) {}
 
+  private async fuzzySuggestions(id: string, limit = 5): Promise<string[]> {
+    const lower = id.toLowerCase()
+    const all = await this.svc.index.listDocs(this.kb)
+    return all
+      .map((d) => d.id)
+      .filter((other) => other.toLowerCase().includes(lower) || lower.includes(other.toLowerCase()))
+      .slice(0, limit)
+  }
+
+  private async assertExists(input: string, id: string, filename: string): Promise<void> {
+    if (this.svc.storage.docExists(this.kb, filename)) return
+    const suggestions = await this.fuzzySuggestions(id)
+    throw new DocNotFoundError(this.kb, input, id, filename, suggestions)
+  }
+
   async search(query: string, limit: number, mode: SearchMode): Promise<SearchResult[]> {
     return this.svc.search.search(this.kb, query, limit, mode)
   }
@@ -110,16 +156,22 @@ export class LocalWikiOps implements WikiOps {
     return this.svc.storage.docExists(this.kb, toFilename(normalizeDocId(filename)))
   }
 
-  async readRaw(filename: string): Promise<string> {
-    return this.svc.storage.readRaw(this.kb, toFilename(normalizeDocId(filename)))
+  async readRaw(rawInput: string): Promise<string> {
+    const { id, filename } = canonicalize(rawInput)
+    await this.assertExists(rawInput, id, filename)
+    return this.svc.storage.readRaw(this.kb, filename)
   }
 
-  async readDoc(filename: string): Promise<ParsedDoc> {
-    return this.svc.storage.readDoc(this.kb, toFilename(normalizeDocId(filename)))
+  async readDoc(rawInput: string): Promise<ParsedDoc> {
+    const { id, filename } = canonicalize(rawInput)
+    await this.assertExists(rawInput, id, filename)
+    return this.svc.storage.readDoc(this.kb, filename)
   }
 
-  async readSlice(filename: string, fromLine: number, toLine: number): Promise<ReadSliceResult> {
-    return this.svc.storage.readSlice(this.kb, toFilename(normalizeDocId(filename)), fromLine, toLine)
+  async readSlice(rawInput: string, fromLine: number, toLine: number): Promise<ReadSliceResult> {
+    const { id, filename } = canonicalize(rawInput)
+    await this.assertExists(rawInput, id, filename)
+    return this.svc.storage.readSlice(this.kb, filename, fromLine, toLine)
   }
 
   async addDoc(title: string, category: string, tags: string[], content: string, opts?: { dryRun?: boolean }): Promise<WriteResult> {
@@ -153,10 +205,7 @@ export class LocalWikiOps implements WikiOps {
 
   async updateDoc(rawId: string, patch: UpdatePatch, opts?: { dryRun?: boolean }): Promise<WriteResult> {
     const { id, filename } = canonicalize(rawId)
-
-    if (!this.svc.storage.docExists(this.kb, filename)) {
-      throw new Error(`Document "${filename}" not found in wiki "${this.kb}". Try \`kb resolve ${rawId}\` or \`kb list\`.`)
-    }
+    await this.assertExists(rawId, id, filename)
 
     const doc = this.svc.storage.readDoc(this.kb, filename)
 
@@ -186,10 +235,7 @@ export class LocalWikiOps implements WikiOps {
 
   async deleteDoc(rawId: string): Promise<{ deleted: string; warnings: string[] }> {
     const { id, filename } = canonicalize(rawId)
-
-    if (!this.svc.storage.docExists(this.kb, filename)) {
-      throw new Error(`Document "${filename}" not found in wiki "${this.kb}". Try \`kb resolve ${rawId}\` or \`kb list\`.`)
-    }
+    await this.assertExists(rawId, id, filename)
 
     const backlinks = await this.svc.index.getLinksTo(this.kb, id)
     const warnings: string[] = []
@@ -211,9 +257,7 @@ export class LocalWikiOps implements WikiOps {
     const { id: oldId, filename: oldFilename } = canonicalize(rawOldId)
     const { id: newId, filename: newFilename } = canonicalize(rawNewId)
 
-    if (!this.svc.storage.docExists(this.kb, oldFilename)) {
-      throw new Error(`Document "${oldFilename}" not found in wiki "${this.kb}".`)
-    }
+    await this.assertExists(rawOldId, oldId, oldFilename)
 
     if (this.svc.storage.docExists(this.kb, newFilename)) {
       throw new Error(`Document "${newFilename}" already exists in wiki "${this.kb}".`)
@@ -242,6 +286,7 @@ export class LocalWikiOps implements WikiOps {
 
   async related(rawId: string, limit: number): Promise<RelatedResult[]> {
     const { id, filename } = canonicalize(rawId)
+    await this.assertExists(rawId, id, filename)
     const scored = await this.svc.workflow.findRelated(this.kb, id, filename, limit)
     return this.svc.search.buildRelatedResults(this.kb, scored)
   }
@@ -262,9 +307,7 @@ export class LocalWikiOps implements WikiOps {
 
   async reindexDoc(rawId: string): Promise<{ id: string; filename: string }> {
     const { id, filename } = canonicalize(rawId)
-    if (!this.svc.storage.docExists(this.kb, filename)) {
-      throw new Error(`Document "${filename}" not found in wiki "${this.kb}". Try \`kb resolve ${rawId}\` or \`kb list\`.`)
-    }
+    await this.assertExists(rawId, id, filename)
     const doc = this.svc.storage.readDoc(this.kb, filename)
     await this.svc.workflow.indexAndEmbed(this.kb, id, doc.frontmatter)
     this.svc.activityLog.log(this.kb, 'reindex', id)
@@ -331,15 +374,7 @@ export class LocalWikiOps implements WikiOps {
         category = doc.frontmatter.category
       } catch {}
     }
-    let suggestions: string[] = []
-    if (!exists && id !== '') {
-      const all = await this.svc.index.listDocs(this.kb)
-      const lower = id.toLowerCase()
-      suggestions = all
-        .map((d) => d.id)
-        .filter((other) => other.toLowerCase().includes(lower) || lower.includes(other.toLowerCase()))
-        .slice(0, 5)
-    }
+    const suggestions = !exists && id !== '' ? await this.fuzzySuggestions(id) : []
     return { input, id, filename, exists, title, category, suggestions }
   }
 }
@@ -357,8 +392,16 @@ export class RemoteWikiOps implements WikiOps {
   }
 
   async docExists(filename: string): Promise<boolean> {
-    const data = await this.client.read(this.url, this.wiki, normalizeDocId(filename), undefined, this.secret)
-    return !data.error
+    try {
+      await this.client.read(this.url, this.wiki, normalizeDocId(filename), undefined, this.secret)
+      return true
+    } catch (err: unknown) {
+      // The API used to return 200 + `{ error }` for missing docs; it now
+      // returns HTTP 404. Treat that single case as "exists = false";
+      // re-throw anything else so real failures don't masquerade as 'no'.
+      if (err instanceof RemoteError && err.status === 404) return false
+      throw err
+    }
   }
 
   async readRaw(filename: string): Promise<string> {
@@ -367,7 +410,6 @@ export class RemoteWikiOps implements WikiOps {
 
   async readDoc(filename: string): Promise<ParsedDoc> {
     const data = await this.client.read(this.url, this.wiki, normalizeDocId(filename), { format: 'json' }, this.secret)
-    if (data.error) throw new Error(data.error)
     return {
       frontmatter: data.meta,
       body: data.content,

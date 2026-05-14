@@ -1,6 +1,7 @@
 import { Controller, Cli, Param, CliOption, Description, Optional } from '@moostjs/event-cli'
 import { services } from '../services/container.js'
 import { canonicalize, parseLineRange } from '../utils/slug.js'
+import { formatDocNotFound } from '../services/wiki-ops.js'
 
 @Controller()
 export class ReadController {
@@ -21,10 +22,12 @@ export class ReadController {
   ): Promise<string | object> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
-    const targetPath = canonicalize(follow || docPath).filename
+    const input = follow || docPath
+    const targetPath = canonicalize(input).filename
 
     if (!await ops.docExists(targetPath)) {
-      return `Error: Document "${targetPath}" not found.`
+      const r = await ops.resolve(input)
+      return `Error: ${formatDocNotFound({ kb: ref.name, input, suggestions: r.suggestions })}`
     }
 
     if (meta) {

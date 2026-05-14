@@ -1,8 +1,13 @@
 import type { SearchMode } from './search.service.js'
 
 export class RemoteError extends Error {
-  constructor(public status: number, message: string, public url: string) {
-    super(`Remote error (${status}): ${message}`)
+  constructor(
+    public status: number,
+    message: string,
+    public url: string,
+    public body?: Record<string, unknown>,
+  ) {
+    super(message)
   }
 }
 
@@ -16,11 +21,20 @@ export class RemoteClient {
 
     if (!res.ok) {
       let message = res.statusText
+      let body: Record<string, unknown> | undefined
       try {
-        const body = await res.json()
-        if (body.error) message = body.error
+        body = await res.json()
+        // Prefer the custom message — `error` is the generic HTTP status text
+        // (e.g. "Not Found") when our HttpError(code, {...}) body is used;
+        // `message` carries our actual text. Older string-body errors set
+        // `error` to the message — fall back to that, then to statusText.
+        const m = body && typeof body === 'object' ? body : {}
+        message =
+          (typeof m.message === 'string' && m.message) ||
+          (typeof m.error === 'string' && m.error) ||
+          res.statusText
       } catch {}
-      throw new RemoteError(res.status, message, fullUrl)
+      throw new RemoteError(res.status, message, fullUrl, body)
     }
 
     const contentType = res.headers.get('content-type') || ''
