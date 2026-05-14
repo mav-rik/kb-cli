@@ -3,6 +3,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Controller, Cli, CliOption, Description, Optional } from '@moostjs/event-cli'
+import { AgentList } from '../models/api-bodies.as'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const setupDir = path.resolve(__dirname, '..', 'content', 'setup')
@@ -159,7 +160,7 @@ export class SetupController {
   @Description('Set up kb integration for AI agents')
   setup(
     @Description('Agents to install (comma-separated: claude,cursor,codex,cline,windsurf,continue)')
-    @CliOption('agents', 'a') @Optional() agents: string,
+    @CliOption('agents', 'a') @Optional() agents: AgentList,
     @Description('Install for all supported agents')
     @CliOption('all') all: boolean,
     @Description('Write to user-scope files (~/.claude/CLAUDE.md, ~/.codex/AGENTS.md) instead of project-local')

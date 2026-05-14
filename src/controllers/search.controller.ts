@@ -2,6 +2,7 @@ import { Controller, Cli, Param, CliOption, Description, Optional } from '@moost
 import { services } from '../services/container.js'
 import { SearchMode } from '../services/search.service.js'
 import { toDocId, toFilename } from '../utils/slug.js'
+import { WikiName, DocHandle } from '../models/api-bodies.as'
 
 @Controller()
 export class SearchController {
@@ -15,7 +16,7 @@ export class SearchController {
     @Description('Max results') @CliOption('limit', 'n') @Optional() limit: string,
     @Description('Search mode: hybrid, fts, vec') @CliOption('mode', 'm') @Optional() mode: string,
     @Description('Output format') @CliOption('format') @Optional() format: string,
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string | object> {
     const parsedLimit = limit ? parseInt(limit, 10) : 10
     const ref = this.config.resolveWiki(wiki)
@@ -37,10 +38,10 @@ export class SearchController {
   @Cli('related/:id')
   @Description('Find documents related to a given document')
   async related(
-    @Param('id') id: string,
+    @Param('id') id: DocHandle,
     @Description('Max results') @CliOption('limit', 'n') @Optional() limit: string,
     @Description('Output format') @CliOption('format') @Optional() format: string,
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string | object> {
     const parsedLimit = limit ? parseInt(limit, 10) : 10
     const ref = this.config.resolveWiki(wiki)

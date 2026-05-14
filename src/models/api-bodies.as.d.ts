@@ -42,8 +42,24 @@ declare namespace DocHandle {
 }
 
 /**
+ * Atscript type **AgentList**
+ * @see {@link ./api-bodies.as:25:13}
+ */
+export type AgentList = string
+declare namespace AgentList {
+  const __is_atscript_annotated_type: true
+  const type: TAtscriptTypeFinal<AgentList>
+  const metadata: TMetadataMap<AtscriptMetadata>
+  const validator: (opts?: Partial<TValidatorOptions>) => Validator<typeof AgentList>
+  /** @deprecated JSON Schema support is disabled. Calling this method will throw a runtime error. To enable, set `jsonSchema: 'lazy'` or `jsonSchema: 'bundle'` in tsPlugin options, or add `@emit.jsonSchema` annotation to individual interfaces. */
+  const toJsonSchema: () => any
+  /** @deprecated Example Data support is disabled. To enable, set `exampleData: true` in tsPlugin options. */
+  const toExampleData: (() => any) | undefined
+}
+
+/**
  * Atscript interface **AddDocBody**
- * @see {@link ./api-bodies.as:22:18}
+ * @see {@link ./api-bodies.as:28:18}
  */
 export declare class AddDocBody {
   title: string
@@ -70,7 +86,7 @@ export declare class AddDocBody {
 
 /**
  * Atscript interface **UpdateDocBody**
- * @see {@link ./api-bodies.as:49:18}
+ * @see {@link ./api-bodies.as:55:18}
  */
 export declare class UpdateDocBody {
   title?: string
@@ -99,7 +115,7 @@ export declare class UpdateDocBody {
 
 /**
  * Atscript interface **RenameDocBody**
- * @see {@link ./api-bodies.as:72:18}
+ * @see {@link ./api-bodies.as:78:18}
  */
 export declare class RenameDocBody {
   newId?: string
@@ -118,7 +134,7 @@ export declare class RenameDocBody {
 
 /**
  * Atscript interface **CreateWikiBody**
- * @see {@link ./api-bodies.as:80:18}
+ * @see {@link ./api-bodies.as:86:18}
  */
 export declare class CreateWikiBody {
   name: string
@@ -134,7 +150,7 @@ export declare class CreateWikiBody {
 
 /**
  * Atscript interface **LogAddBody**
- * @see {@link ./api-bodies.as:86:18}
+ * @see {@link ./api-bodies.as:92:18}
  */
 export declare class LogAddBody {
   op?: "ingest" | "query" | "lint" | "note"

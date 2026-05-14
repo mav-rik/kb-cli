@@ -1,6 +1,7 @@
 import { Controller, Cli, Param, CliOption, Description, Optional } from '@moostjs/event-cli'
 import { services } from '../services/container.js'
 import { toFilename, toDocId } from '../utils/slug.js'
+import { WikiName, DocHandle } from '../models/api-bodies.as'
 import type { LintIssue, LintRepair } from '../services/doc-workflow.service.js'
 
 const REPAIR_LABELS: Record<LintRepair['type'], string> = {
@@ -42,7 +43,7 @@ export class LintController {
   async lint(
     @Description('Auto-fix issues') @CliOption('fix') fix: boolean,
     @Description('Output format') @CliOption('format') @Optional() format: string,
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
@@ -104,7 +105,7 @@ export class LintController {
   @Cli('reindex')
   @Description('Rebuild index from markdown files')
   async reindex(
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
@@ -132,8 +133,8 @@ export class LintController {
   @Cli('reindex/:id')
   @Description('Rebuild index for a single document')
   async reindexDoc(
-    @Param('id') id: string,
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
+    @Param('id') id: DocHandle,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
@@ -148,7 +149,7 @@ export class LintController {
   @Cli('toc')
   @Description('Display table of contents for a knowledge base')
   async toc(
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
@@ -181,7 +182,7 @@ export class LintController {
   @Description('Show recent activity log')
   async log(
     @Description('Number of entries') @CliOption('limit', 'n') @Optional() limit: string,
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
@@ -205,9 +206,9 @@ export class LintController {
   @Description('Add a manual log entry (for agent session summaries)')
   async logAdd(
     @Description('Operation type (ingest, query, lint, note)') @CliOption('op', 'o') op: string,
-    @Description('Related document ID') @CliOption('doc', 'd') @Optional() doc: string,
+    @Description('Related document ID') @CliOption('doc', 'd') @Optional() doc: DocHandle,
     @Description('Details / reasoning') @CliOption('details', 'm') @Optional() details: string,
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
@@ -218,7 +219,7 @@ export class LintController {
   @Cli('schema')
   @Description('Show knowledge base schema')
   async schemaRead(
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
@@ -235,7 +236,7 @@ export class LintController {
   @Cli('schema/update')
   @Description('Regenerate knowledge base schema')
   async schemaUpdate(
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)

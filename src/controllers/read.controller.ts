@@ -2,6 +2,7 @@ import { Controller, Cli, Param, CliOption, Description, Optional } from '@moost
 import { services } from '../services/container.js'
 import { canonicalize, parseLineRange } from '../utils/slug.js'
 import { formatDocNotFound } from '../services/wiki-ops.js'
+import { WikiName, DocHandle } from '../models/api-bodies.as'
 
 @Controller()
 export class ReadController {
@@ -12,13 +13,13 @@ export class ReadController {
   @Cli('get/:path')
   @Description('Read a document')
   async read(
-    @Param('path') docPath: string,
+    @Param('path') docPath: DocHandle,
     @Description('Line range (e.g., 1-50)') @CliOption('lines', 'l') @Optional() lines: string,
     @Description('Context lines around the range') @CliOption('context', 'c') @Optional() context: string,
     @Description('Show metadata only') @CliOption('meta', 'm') meta: boolean,
     @Description('List outgoing links') @CliOption('links') links: boolean,
     @Description('Follow a link') @CliOption('follow', 'f') @Optional() follow: string,
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string | object> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
@@ -71,9 +72,9 @@ export class ReadController {
   @Cli('resolve/:input')
   @Description('Resolve any doc handle (id, filename, ./path, full path) to its canonical id + file')
   async resolve(
-    @Param('input') input: string,
+    @Param('input') input: DocHandle,
     @Description('Output format') @CliOption('format') @Optional() format: string,
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string | object> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)

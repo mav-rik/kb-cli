@@ -1,6 +1,7 @@
 import * as fs from 'node:fs'
 import { spawn } from 'node:child_process'
 import { CliApp, Controller, Cli, CliOption, Description, Optional } from '@moostjs/event-cli'
+import { cliValidatorPipe, cliValidationErrorTransform } from './utils/cli-validator.js'
 import { WikiController } from './controllers/wiki.controller.js'
 import { ConfigController } from './controllers/config.controller.js'
 import { ReadController } from './controllers/read.controller.js'
@@ -185,8 +186,15 @@ if (process.argv.length <= 2) {
   process.argv.push('--help')
 }
 
-new CliApp()
+const cliApp = new CliApp()
   .controllers(AppController, WikiController, ConfigController, ReadController, DocController, SearchController, LintController, SkillController, SetupController, RemoteController, MigrateController, StatusController)
   .useHelp({ name: 'kb', title: 'kb — Wiki CLI for AI agents' })
   .useOptions([{ keys: ['help'], description: 'Display instructions.' }])
-  .start()
+
+// Mirror the HTTP setup in src/api/serve.ts: any @Param / @Body typed with
+// an atscript-annotated DTO is validated automatically; a ValidatorError
+// becomes a clean "Error: …" string instead of a crash.
+cliApp.applyGlobalPipes(cliValidatorPipe())
+cliApp.applyGlobalInterceptors(cliValidationErrorTransform())
+
+cliApp.start()

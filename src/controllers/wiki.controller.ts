@@ -3,7 +3,6 @@ import * as path from 'node:path'
 import { Controller, Cli, Param, CliOption, Description } from '@moostjs/event-cli'
 import { services } from '../services/container.js'
 import { WikiName } from '../models/api-bodies.as'
-import { validateAgainstDto } from '../utils/dto-validate.js'
 
 @Controller('wiki')
 export class WikiController {
@@ -15,11 +14,9 @@ export class WikiController {
 
   @Cli('create/:name')
   @Description('Create a new wiki')
-  create(@Param('name') name: string) {
-    // Same atscript constraints as POST /api/wiki -> body.name. Single
-    // source of truth for "valid wiki name" across CLI and HTTP.
-    const validationErr = validateAgainstDto(WikiName, name)
-    if (validationErr) return `Error: invalid wiki name "${name}": ${validationErr}`
+  create(@Param('name') name: WikiName) {
+    // `name: WikiName` carries the @expect.* constraints from api-bodies.as;
+    // the global validatorPipe (main.ts) runs them before this body executes.
     const result = this.wikiMgmt.create(name)
     if ('error' in result) return `Error: ${result.error}`
     return `Created wiki "${name}".`
@@ -27,7 +24,7 @@ export class WikiController {
 
   @Cli('use/:name')
   @Description('Set the default wiki')
-  use(@Param('name') name: string) {
+  use(@Param('name') name: WikiName) {
     if (!this.wikiMgmt.exists(name)) {
       return `Error: Wiki "${name}" does not exist. Run \`kb wiki create ${name}\` first.`
     }
@@ -106,7 +103,7 @@ export class WikiController {
   @Cli('delete/:name')
   @Description('Delete a wiki')
   delete(
-    @Param('name') name: string,
+    @Param('name') name: WikiName,
     @CliOption('force', 'f')
     @Description('Force delete even for default wiki')
     force?: boolean,
@@ -122,7 +119,7 @@ export class WikiController {
 
   @Cli('info/:name')
   @Description('Show info about a wiki')
-  async info(@Param('name') name: string): Promise<string> {
+  async info(@Param('name') name: WikiName): Promise<string> {
     const ref = this.config.resolveWiki(name)
     if (ref.type === 'local' && !this.wikiMgmt.exists(ref.name)) {
       return `Error: Wiki "${name}" does not exist.`

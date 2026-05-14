@@ -18,6 +18,12 @@ export type WikiName = string
 @expect.maxLength 256
 export type DocHandle = string
 
+/** Comma-separated list of agent IDs for `kb setup --agents`. Whitespace
+ *  around tokens tolerated; the controller splits + lowercases.
+ *  Source of truth for valid agents lives here. */
+@expect.pattern '^\s*(claude|cursor|codex|cline|windsurf|continue)(\s*,\s*(claude|cursor|codex|cline|windsurf|continue))*\s*$'
+export type AgentList = string
+
 @meta.description 'POST /api/docs - create a new document.'
 export interface AddDocBody {
   @meta.required

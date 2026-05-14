@@ -1,6 +1,7 @@
 import * as readline from 'node:readline'
 import { Controller, Cli, CliOption, Description, Optional } from '@moostjs/event-cli'
 import { services } from '../services/container.js'
+import { WikiName } from '../models/api-bodies.as'
 import type { MigrationPlan } from '../services/migration.service.js'
 
 @Controller()
@@ -12,7 +13,7 @@ export class MigrateController {
   async migrate(
     @Description('Skip the confirmation prompt') @CliOption('yes', 'y') yes: boolean,
     @Description('Show the migration plan without applying it') @CliOption('dry-run') dryRun: boolean,
-    @Description('Limit migration to a single wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
+    @Description('Limit migration to a single wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const serverInfo = services.localServer.getCached()
     if (serverInfo) {

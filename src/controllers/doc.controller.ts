@@ -2,7 +2,7 @@ import * as fs from 'node:fs'
 import { Controller, Cli, Param, CliOption, Description, Optional } from '@moostjs/event-cli'
 import { services } from '../services/container.js'
 import { composeDocInput } from '../services/wiki-ops.js'
-import { AddDocBody, UpdateDocBody } from '../models/api-bodies.as'
+import { AddDocBody, UpdateDocBody, WikiName, DocHandle } from '../models/api-bodies.as'
 import { validateAgainstDto } from '../utils/dto-validate.js'
 import type { LintIssue } from '../services/doc-workflow.service.js'
 
@@ -23,7 +23,7 @@ export class DocController {
     @Description('Read from stdin') @CliOption('stdin') stdin: boolean,
     @Description('Lint only — no write, no index') @CliOption('dry-run') @Optional() dryRun: boolean,
     @Description('Output format') @CliOption('format') @Optional() format: string,
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const sources = [file, stdin ? '<stdin>' : undefined, content].filter(Boolean)
     if (sources.length > 1) {
@@ -68,7 +68,7 @@ export class DocController {
   @Cli('update/:id')
   @Description('Update an existing document')
   async update(
-    @Param('id') id: string,
+    @Param('id') id: DocHandle,
     @Description('New title') @CliOption('title', 't') @Optional() title: string,
     @Description('New category') @CliOption('category', 'c') @Optional() category: string,
     @Description('New tags') @CliOption('tags') @Optional() tags: string,
@@ -78,7 +78,7 @@ export class DocController {
     @Description('Read replacement content from stdin') @CliOption('stdin') stdin: boolean,
     @Description('Lint only — no write, no index') @CliOption('dry-run') @Optional() dryRun: boolean,
     @Description('Output format') @CliOption('format') @Optional() format: string,
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const sources = [file, stdin ? '<stdin>' : undefined, content, append].filter(Boolean)
     if (sources.length > 1) {
@@ -123,8 +123,8 @@ export class DocController {
   @Cli('delete/:id')
   @Description('Delete a document')
   async delete(
-    @Param('id') id: string,
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
+    @Param('id') id: DocHandle,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
@@ -141,9 +141,9 @@ export class DocController {
   @Cli('rename/:oldId/:newId')
   @Description('Rename a document and update all links')
   async rename(
-    @Param('oldId') oldId: string,
-    @Param('newId') newId: string,
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
+    @Param('oldId') oldId: DocHandle,
+    @Param('newId') newId: DocHandle,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
@@ -162,7 +162,7 @@ export class DocController {
     @Description('Filter by category') @CliOption('category', 'c') @Optional() category: string,
     @Description('Filter by tag') @CliOption('tag') @Optional() tag: string,
     @Description('Output format') @CliOption('format') @Optional() format: string,
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string | object> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
@@ -189,7 +189,7 @@ export class DocController {
   @Cli('categories')
   @Description('List all categories in use')
   async categories(
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
