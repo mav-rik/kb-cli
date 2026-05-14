@@ -1,16 +1,17 @@
 # Search Workflow — Retrieving Knowledge
 
-The wiki is a **graph**. Search returns seed pages, not answers. Real understanding comes from reading a seed, following its links, reading those, and continuing until you have enough context. One document is almost never enough.
+The wiki is a **graph**. `kb search` returns **ranked seed docs**, not exact answers — and not an existence check for a specific id. Real understanding comes from reading a seed, following its links, reading those, and continuing until you have enough context. One document is almost never enough.
+
+**Use `kb search` when:** you want the most-relevant docs for a question or topic.
+**Use `kb resolve <handle>` when:** you want to know whether a specific doc exists (and what its canonical id/filename is). Search will rank-order even unrelated docs; resolve tells you yes/no with fuzzy suggestions.
 
 ## Search modes
 
 | Mode | Flag | When to use |
 |------|------|-------------|
-| **hybrid** (default) | `--mode hybrid` or omit | Best ranking, combines both. Use for most queries. |
-| **fts** | `--mode fts` | Exact terms, function names, identifiers. Instant, no model load. |
-| **vec** | `--mode vec` | Conceptual/semantic queries ("how does X work", "what handles Y"). |
-
-**Rule of thumb**: If the query contains a specific identifier or exact term → use `fts`. If it's a natural language question → use `vec` or `hybrid`.
+| **hybrid** (default) | `--mode hybrid` or omit | The right default when you do not want to think about mode choice. Fuses fts + vec via Reciprocal Rank Fusion. |
+| **fts** | `--mode fts` | Best for **exact tokens and identifiers** — function names, error strings, library names, anything you would grep for. Instant, no model load. |
+| **vec** | `--mode vec` | Best for **conceptual questions** — "how does X work", "what handles Y", paraphrased queries where exact words may not appear in the docs. |
 
 ## Step 1: Search
 
