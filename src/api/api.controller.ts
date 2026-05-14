@@ -3,7 +3,53 @@ import { Get, Post, Put, Delete, Body, Query, SetStatus, HttpError } from '@moos
 import { services } from '../services/container.js'
 import { parseLineRange } from '../utils/slug.js'
 import { readContent } from '../utils/content.js'
-import { LocalWikiOps, DocNotFoundError } from '../services/wiki-ops.js'
+import { LocalWikiOps, DocNotFoundError, InvalidDocInputError, composeDocInput, type DocInput } from '../services/wiki-ops.js'
+
+/**
+ * The wire shape POST/PUT /api/docs accepts. Both `body` (canonical) and
+ * legacy `content`/`text` aliases are accepted. `apiBodyToInput` funnels
+ * the wire payload through the SAME `composeDocInput` used by the CLI, so
+ * suppression / frontmatter handling is identical regardless of caller.
+ */
+interface ApiDocBody {
+  title?: string
+  category?: string
+  tags?: string[]
+  body?: string
+  content?: string
+  text?: string
+  appendBody?: string
+  append?: string
+  raw?: string
+  dryRun?: boolean
+  wiki?: string
+  importantSections?: string[]
+  suppressMergeWarn?: string[]
+  suppressLint?: string[]
+}
+
+function apiBodyToInput(body: ApiDocBody): DocInput {
+  // `raw` lets HTTP callers send a full markdown blob (frontmatter + body)
+  // and have the server parse it just like `kb add --file`.
+  const rawFileContent = body.raw
+  const rawBody = rawFileContent === undefined
+    ? (body.body ?? body.content ?? body.text)
+    : undefined
+  return composeDocInput({
+    parser: services.parser,
+    rawFileContent,
+    rawBody,
+    appendBody: body.appendBody ?? body.append,
+    overrides: {
+      title: body.title,
+      category: body.category,
+      tags: body.tags,
+      importantSections: body.importantSections,
+      suppressMergeWarn: body.suppressMergeWarn,
+      suppressLint: body.suppressLint,
+    },
+  })
+}
 
 function httpErrorFor(err: any): HttpError {
   // DocNotFoundError → 404 with suggestions in the body so clients can
@@ -17,6 +63,9 @@ function httpErrorFor(err: any): HttpError {
       filename: err.filename,
       suggestions: err.suggestions,
     } as never)
+  }
+  if (err instanceof InvalidDocInputError) {
+    return new HttpError(400, { message: err.message, kind: 'invalid-doc-input' } as never)
   }
   return new HttpError(500, err?.message ?? 'Internal error')
 }
@@ -130,47 +179,20 @@ export class ApiController {
 
   @Post('docs')
   @SetStatus(201)
-  async addDoc(@Body() body: {
-    title: string
-    category: string
-    tags?: string[]
-    content?: string
-    body?: string
-    text?: string
-    dryRun?: boolean
-    wiki?: string
-  }) {
+  async addDoc(@Body() body: ApiDocBody) {
     const wikiName = this.config.resolveWikiName(body.wiki)
-    const content = body.content || body.body || body.text || ''
     try {
-      return await this.localOps(wikiName).addDoc(body.title, body.category, body.tags || [], content, { dryRun: body.dryRun })
+      return await this.localOps(wikiName).addDoc(apiBodyToInput(body), { dryRun: body.dryRun })
     } catch (err: any) {
       throw httpErrorFor(err)
     }
   }
 
   @Put('docs/:id')
-  async updateDoc(@Param('id') id: string, @Body() body: {
-    title?: string
-    category?: string
-    tags?: string[]
-    content?: string
-    body?: string
-    text?: string
-    append?: string
-    dryRun?: boolean
-    wiki?: string
-  }) {
+  async updateDoc(@Param('id') id: string, @Body() body: ApiDocBody) {
     const wikiName = this.config.resolveWikiName(body.wiki)
-    const patch: { title?: string; category?: string; tags?: string[]; content?: string; append?: string } = {}
-    if (body.title !== undefined) patch.title = body.title
-    if (body.category !== undefined) patch.category = body.category
-    if (body.tags !== undefined) patch.tags = body.tags
-    const newContent = body.content ?? body.body ?? body.text
-    if (newContent !== undefined) patch.content = newContent
-    if (body.append !== undefined) patch.append = body.append
     try {
-      return await this.localOps(wikiName).updateDoc(id, patch, { dryRun: body.dryRun })
+      return await this.localOps(wikiName).updateDoc(id, apiBodyToInput(body), { dryRun: body.dryRun })
     } catch (err: any) {
       throw httpErrorFor(err)
     }

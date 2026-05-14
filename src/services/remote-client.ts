@@ -101,11 +101,45 @@ export class RemoteClient {
     return this.get(url, `/read-slice/${encodeURIComponent(filename)}?${params}`, secret)
   }
 
-  async addDoc(url: string, wiki: string, doc: { title: string; category: string; tags?: string[]; content?: string; dryRun?: boolean }, secret?: string) {
+  /** DocInput-shaped body. `title` and `category` are required for add but
+   *  the field-level types are forgiving so RemoteWikiOps can pass DocInput
+   *  through unchanged — the server validates required fields. */
+  async addDoc(
+    url: string,
+    wiki: string,
+    doc: {
+      title?: string
+      category?: string
+      tags?: string[]
+      body?: string
+      appendBody?: string
+      dryRun?: boolean
+      importantSections?: string[]
+      suppressMergeWarn?: string[]
+      suppressLint?: string[]
+    },
+    secret?: string,
+  ) {
     return this.post(url, '/docs', { ...doc, wiki }, secret)
   }
 
-  async updateDoc(url: string, wiki: string, id: string, patch: { title?: string; category?: string; tags?: string[]; content?: string; append?: string; dryRun?: boolean }, secret?: string) {
+  async updateDoc(
+    url: string,
+    wiki: string,
+    id: string,
+    patch: {
+      title?: string
+      category?: string
+      tags?: string[]
+      body?: string
+      appendBody?: string
+      dryRun?: boolean
+      importantSections?: string[]
+      suppressMergeWarn?: string[]
+      suppressLint?: string[]
+    },
+    secret?: string,
+  ) {
     return this.put(url, `/docs/${encodeURIComponent(id)}`, { ...patch, wiki }, secret)
   }
 

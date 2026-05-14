@@ -13,12 +13,36 @@ import type { SchemaService } from './schema.service.js'
 import type { ActivityLogService } from './activity-log.service.js'
 import { slugify, toFilename, canonicalize, normalizeDocId, today } from '../utils/slug.js'
 
-export interface UpdatePatch {
+/**
+ * Canonical shape every doc-writing entry point funnels through. CLI
+ * `add`/`update`, HTTP POST/PUT, file-mode and content-mode all build one of
+ * these and hand it to `addDoc` / `updateDoc`. Suppression fields
+ * (`importantSections`, `suppressMergeWarn`, `suppressLint`) reach
+ * `lintRawDoc` via this single path — there is no separate codepath that
+ * could drop them.
+ *
+ * Semantics:
+ * - `body` replaces the whole body (mutually exclusive with `appendBody`).
+ * - `appendBody` appends to the existing body (update only — ignored on add).
+ * - `undefined` on update means "leave existing value alone". On add,
+ *   `title` and `category` are required at the wiki-ops boundary.
+ */
+export interface DocInput {
   title?: string
   category?: string
   tags?: string[]
-  content?: string
-  append?: string
+  body?: string
+  appendBody?: string
+  importantSections?: string[]
+  suppressMergeWarn?: string[]
+  suppressLint?: string[]
+}
+
+/** Back-compat alias — UpdatePatch is now DocInput. */
+export type UpdatePatch = DocInput
+
+export interface WriteOpts {
+  dryRun?: boolean
 }
 
 export interface DocEntry {
@@ -71,6 +95,10 @@ export function formatDocNotFound(opts: {
   return lines.join('\n')
 }
 
+export class InvalidDocInputError extends Error {
+  name = 'InvalidDocInputError'
+}
+
 export class DocNotFoundError extends Error {
   name = 'DocNotFoundError'
   constructor(
@@ -100,8 +128,8 @@ export interface WikiOps {
   readRaw(filename: string): Promise<string>
   readDoc(filename: string): Promise<ParsedDoc>
   readSlice(filename: string, fromLine: number, toLine: number): Promise<ReadSliceResult>
-  addDoc(title: string, category: string, tags: string[], content: string, opts?: { dryRun?: boolean }): Promise<WriteResult>
-  updateDoc(id: string, patch: UpdatePatch, opts?: { dryRun?: boolean }): Promise<WriteResult>
+  addDoc(input: DocInput, opts?: WriteOpts): Promise<WriteResult>
+  updateDoc(id: string, input: DocInput, opts?: WriteOpts): Promise<WriteResult>
   deleteDoc(id: string): Promise<{ deleted: string; warnings: string[] }>
   rename(oldId: string, newId: string): Promise<{ oldId: string; newId: string; linksUpdated: number }>
   listDocs(filters?: { category?: string; tag?: string }): Promise<DocEntry[]>
@@ -174,52 +202,48 @@ export class LocalWikiOps implements WikiOps {
     return this.svc.storage.readSlice(this.kb, filename, fromLine, toLine)
   }
 
-  async addDoc(title: string, category: string, tags: string[], content: string, opts?: { dryRun?: boolean }): Promise<WriteResult> {
-    const id = slugify(title)
+  async addDoc(input: DocInput, opts?: WriteOpts): Promise<WriteResult> {
+    if (!input.title) throw new InvalidDocInputError('title is required for kb add (pass --title, or include it in the file frontmatter).')
+    if (!input.category) throw new InvalidDocInputError('category is required for kb add (pass --category, or include it in the file frontmatter).')
+    const id = slugify(input.title)
     const filename = `${id}.md`
 
     if (!opts?.dryRun && this.svc.storage.docExists(this.kb, filename)) {
       throw new Error(`Document "${filename}" already exists in wiki "${this.kb}".`)
     }
 
-    const frontmatter: DocFrontmatter = {
+    const frontmatter = mergeFrontmatter({
       id,
-      title,
-      category,
-      tags,
       created: today(),
       updated: today(),
-    }
+      title: input.title,
+      category: input.category,
+      tags: input.tags ?? [],
+    }, input)
 
-    const raw = this.svc.parser.serialize(frontmatter, content)
+    const body = input.body ?? ''
+    const raw = this.svc.parser.serialize(frontmatter, body)
     const issues = this.svc.workflow.lintRawDoc(raw, filename)
 
     if (opts?.dryRun) return { id, filename, issues }
 
-    this.svc.storage.writeDoc(this.kb, filename, frontmatter, content)
+    this.svc.storage.writeDoc(this.kb, filename, frontmatter, body)
     await this.svc.workflow.indexAndEmbed(this.kb, id, frontmatter)
-    this.svc.activityLog.log(this.kb, 'add', id, `category=${category}`)
+    this.svc.activityLog.log(this.kb, 'add', id, `category=${input.category}`)
 
     return { id, filename, issues }
   }
 
-  async updateDoc(rawId: string, patch: UpdatePatch, opts?: { dryRun?: boolean }): Promise<WriteResult> {
+  async updateDoc(rawId: string, input: DocInput, opts?: WriteOpts): Promise<WriteResult> {
     const { id, filename } = canonicalize(rawId)
     await this.assertExists(rawId, id, filename)
 
     const doc = this.svc.storage.readDoc(this.kb, filename)
-
-    const frontmatter: DocFrontmatter = {
-      ...doc.frontmatter,
-      ...(patch.title !== undefined && { title: patch.title }),
-      ...(patch.category !== undefined && { category: patch.category }),
-      ...(patch.tags !== undefined && { tags: patch.tags }),
-      updated: today(),
-    }
+    const frontmatter = mergeFrontmatter({ ...doc.frontmatter, updated: today() }, input)
 
     let body = doc.body
-    if (patch.content !== undefined) body = patch.content
-    else if (patch.append !== undefined) body = body + patch.append
+    if (input.body !== undefined) body = input.body
+    else if (input.appendBody !== undefined) body = body + input.appendBody
 
     const raw = this.svc.parser.serialize(frontmatter, body)
     const issues = this.svc.workflow.lintRawDoc(raw, filename)
@@ -421,12 +445,12 @@ export class RemoteWikiOps implements WikiOps {
     return this.client.readSlice(this.url, this.wiki, normalizeDocId(filename), fromLine, toLine, this.secret)
   }
 
-  async addDoc(title: string, category: string, tags: string[], content: string, opts?: { dryRun?: boolean }): Promise<WriteResult> {
-    return this.client.addDoc(this.url, this.wiki, { title, category, tags, content, dryRun: opts?.dryRun }, this.secret) as Promise<WriteResult>
+  async addDoc(input: DocInput, opts?: WriteOpts): Promise<WriteResult> {
+    return this.client.addDoc(this.url, this.wiki, { ...input, dryRun: opts?.dryRun }, this.secret) as Promise<WriteResult>
   }
 
-  async updateDoc(id: string, patch: UpdatePatch, opts?: { dryRun?: boolean }): Promise<WriteResult> {
-    return this.client.updateDoc(this.url, this.wiki, normalizeDocId(id), { ...patch, dryRun: opts?.dryRun }, this.secret) as Promise<WriteResult>
+  async updateDoc(id: string, input: DocInput, opts?: WriteOpts): Promise<WriteResult> {
+    return this.client.updateDoc(this.url, this.wiki, normalizeDocId(id), { ...input, dryRun: opts?.dryRun }, this.secret) as Promise<WriteResult>
   }
 
   async deleteDoc(id: string): Promise<{ deleted: string; warnings: string[] }> {
@@ -492,4 +516,74 @@ export class RemoteWikiOps implements WikiOps {
   async resolve(input: string): Promise<ResolveResult> {
     return this.client.resolve(this.url, this.wiki, input, this.secret) as Promise<ResolveResult>
   }
+}
+
+/**
+ * Single funnel that merges a partial `DocInput` over a base frontmatter.
+ * Used by both addDoc (base = freshly-built skeleton) and updateDoc (base =
+ * existing on-disk frontmatter). Undefined fields fall through to the base;
+ * defined fields replace. Suppression fields go through this path too — any
+ * future entry point that builds a `DocInput` automatically inherits the
+ * suppression plumbing.
+ */
+function mergeFrontmatter(base: DocFrontmatter, input: DocInput): DocFrontmatter {
+  return {
+    ...base,
+    ...(input.title !== undefined && { title: input.title }),
+    ...(input.category !== undefined && { category: input.category }),
+    ...(input.tags !== undefined && { tags: input.tags }),
+    ...(input.importantSections !== undefined && { importantSections: input.importantSections }),
+    ...(input.suppressMergeWarn !== undefined && { suppressMergeWarn: input.suppressMergeWarn }),
+    ...(input.suppressLint !== undefined && { suppressLint: input.suppressLint }),
+  }
+}
+
+/**
+ * Build a canonical `DocInput` from any combination of:
+ * - Raw markdown file content (with optional frontmatter — parsed via the
+ *   ParserService and re-projected onto DocInput).
+ * - Plain body text (e.g. from `--content` flag or stdin).
+ * - Explicit field overrides (CLI flags `--title`, `--category`, `--tags`).
+ *
+ * Explicit overrides always win over file frontmatter (when both define the
+ * same field). File frontmatter wins over plain text. Plain text contributes
+ * only the body. This is the SINGLE composition function called by every
+ * doc-writing entry point — CLI add, CLI update, HTTP POST, HTTP PUT — so
+ * suppression and other frontmatter fields can never be silently dropped on
+ * one path but honored on another.
+ */
+export function composeDocInput(args: {
+  parser: ParserService
+  rawFileContent?: string
+  rawBody?: string
+  appendBody?: string
+  overrides?: DocInput
+}): DocInput {
+  let input: DocInput = {}
+  if (args.rawFileContent !== undefined) {
+    if (args.rawFileContent.startsWith('---')) {
+      const parsed = args.parser.parse(args.rawFileContent)
+      input = {
+        title: parsed.frontmatter.title || undefined,
+        category: parsed.frontmatter.category || undefined,
+        tags: parsed.frontmatter.tags?.length ? parsed.frontmatter.tags : undefined,
+        body: parsed.body,
+        importantSections: parsed.frontmatter.importantSections,
+        suppressMergeWarn: parsed.frontmatter.suppressMergeWarn,
+        suppressLint: parsed.frontmatter.suppressLint,
+      }
+    } else {
+      input.body = args.rawFileContent
+    }
+  } else if (args.rawBody !== undefined) {
+    input.body = args.rawBody
+  }
+  if (args.appendBody !== undefined) input.appendBody = args.appendBody
+  if (args.overrides) {
+    // Drop undefined keys from overrides so they don't blank out file values.
+    for (const k of Object.keys(args.overrides) as (keyof DocInput)[]) {
+      if (args.overrides[k] !== undefined) (input as any)[k] = args.overrides[k]
+    }
+  }
+  return input
 }

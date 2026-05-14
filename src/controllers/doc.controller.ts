@@ -1,7 +1,7 @@
 import * as fs from 'node:fs'
 import { Controller, Cli, Param, CliOption, Description, Optional } from '@moostjs/event-cli'
 import { services } from '../services/container.js'
-import type { UpdatePatch } from '../services/wiki-ops.js'
+import { composeDocInput } from '../services/wiki-ops.js'
 import type { LintIssue } from '../services/doc-workflow.service.js'
 
 @Controller()
@@ -23,37 +23,35 @@ export class DocController {
     @Description('Output format') @CliOption('format') @Optional() format: string,
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
-    let body = ''
-    let fileFrontmatter: { title?: string; category?: string; tags?: string[] } | undefined
-
-    if (file) {
-      if (!fs.existsSync(file)) {
-        return `Error: File "${file}" not found.`
-      }
-      const raw = fs.readFileSync(file, 'utf-8')
-      if (raw.startsWith('---')) {
-        const parsed = this.parser.parse(raw)
-        body = parsed.body
-        fileFrontmatter = parsed.frontmatter
-      } else {
-        body = raw
-      }
-    } else if (stdin) {
-      body = await readStdin()
-    } else if (content) {
-      body = content
+    const sources = [file, stdin ? '<stdin>' : undefined, content].filter(Boolean)
+    if (sources.length > 1) {
+      return `Error: --file, --stdin, and --content are mutually exclusive (got ${sources.length}). Pick one.`
     }
-
-    const effectiveTitle = fileFrontmatter?.title || title
-    const effectiveCategory = fileFrontmatter?.category || category
-    const effectiveTags = fileFrontmatter?.tags?.length
-      ? fileFrontmatter.tags
-      : tags ? tags.split(',').map((t) => t.trim()) : []
+    let rawFileContent: string | undefined
+    let rawBody: string | undefined
+    if (file) {
+      if (!fs.existsSync(file)) return `Error: File "${file}" not found.`
+      rawFileContent = fs.readFileSync(file, 'utf-8')
+    } else if (stdin) {
+      rawBody = await readStdin()
+    } else if (content !== undefined) {
+      rawBody = content
+    }
+    const input = composeDocInput({
+      parser: this.parser,
+      rawFileContent,
+      rawBody,
+      overrides: {
+        title: title || undefined,
+        category: category || undefined,
+        tags: tags ? tags.split(',').map((t) => t.trim()) : undefined,
+      },
+    })
 
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
     try {
-      const result = await ops.addDoc(effectiveTitle, effectiveCategory, effectiveTags, body, { dryRun })
+      const result = await ops.addDoc(input, { dryRun })
       return formatOpResult('add', result.filename, result.issues, format, dryRun)
     } catch (err: any) {
       return `Error: ${err.message}`
@@ -79,44 +77,32 @@ export class DocController {
     if (sources.length > 1) {
       return `Error: --file, --stdin, --content, and --append are mutually exclusive (got ${sources.length}). Pick one.`
     }
-
-    let resolvedContent: string | undefined = content
-    let fileFrontmatter: { title?: string; category?: string; tags?: string[] } | undefined
-
+    let rawFileContent: string | undefined
+    let rawBody: string | undefined
     if (file) {
-      if (!fs.existsSync(file)) {
-        return `Error: File "${file}" not found.`
-      }
-      const raw = fs.readFileSync(file, 'utf-8')
-      if (raw.startsWith('---')) {
-        const parsed = this.parser.parse(raw)
-        resolvedContent = parsed.body
-        fileFrontmatter = parsed.frontmatter
-      } else {
-        resolvedContent = raw
-      }
+      if (!fs.existsSync(file)) return `Error: File "${file}" not found.`
+      rawFileContent = fs.readFileSync(file, 'utf-8')
     } else if (stdin) {
-      resolvedContent = await readStdin()
+      rawBody = await readStdin()
+    } else if (content !== undefined) {
+      rawBody = content
     }
+    const input = composeDocInput({
+      parser: this.parser,
+      rawFileContent,
+      rawBody,
+      appendBody: append,
+      overrides: {
+        title: title || undefined,
+        category: category || undefined,
+        tags: tags ? tags.split(',').map((t) => t.trim()) : undefined,
+      },
+    })
 
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
-    const patch: UpdatePatch = {}
-    // File frontmatter overrides explicit CLI flags only when the CLI flag
-    // wasn't provided — explicit flags always win.
-    const effectiveTitle = title ?? fileFrontmatter?.title
-    const effectiveCategory = category ?? fileFrontmatter?.category
-    const effectiveTags = tags !== undefined
-      ? tags.split(',').map((t) => t.trim())
-      : fileFrontmatter?.tags
-    if (effectiveTitle !== undefined) patch.title = effectiveTitle
-    if (effectiveCategory !== undefined) patch.category = effectiveCategory
-    if (effectiveTags !== undefined) patch.tags = effectiveTags
-    if (resolvedContent !== undefined) patch.content = resolvedContent
-    if (append !== undefined) patch.append = append
-
     try {
-      const result = await ops.updateDoc(id, patch, { dryRun })
+      const result = await ops.updateDoc(id, input, { dryRun })
       return formatOpResult('update', result.filename, result.issues, format, dryRun)
     } catch (err: any) {
       return `Error: ${err.message}`
