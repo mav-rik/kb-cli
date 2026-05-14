@@ -116,7 +116,7 @@ kb search <query>        Hybrid search (--mode hybrid|fts|vec, --limit, --format
 kb read <file>           Read document (--lines, --meta, --links, --follow); alias: kb get
 kb resolve <arg>         Resolve any handle (id, .md, ./path, full path) → canonical id + suggestions
 kb add                   Add document (--content/--file/--stdin, --dry-run, --format json)
-kb update <id>           Update document (--content, --append, --dry-run, --format json)
+kb update <id>           Update document (--content/--file/--stdin/--append, --dry-run, --format json)
 kb delete <id>           Delete document
 kb rename <old> <new>    Rename with automatic link updates
 kb list                  List documents (--category, --tag, --format json)
