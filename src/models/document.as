@@ -6,7 +6,6 @@ export interface Document {
 
     title: string
 
-    @db.search.filter 'embedding'
     category: string
 
     @db.json

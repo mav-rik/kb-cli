@@ -1,6 +1,6 @@
 import { Controller, Cli, Param, CliOption, Description, Optional } from '@moostjs/event-cli'
 import { services } from '../services/container.js'
-import { SearchResult, SearchMode } from '../services/search.service.js'
+import { SearchMode } from '../services/search.service.js'
 import { toDocId, toFilename } from '../utils/slug.js'
 
 @Controller()
@@ -24,15 +24,14 @@ export class SearchController {
 
     const results = await ops.search(query, parsedLimit, searchMode)
 
-    if (results.length === 0) {
-      return 'No results found.'
-    }
+    if (results.length === 0) return 'No results found.'
+    if (format === 'json') return JSON.stringify(results, null, 2)
 
-    if (format === 'json') {
-      return JSON.stringify(results, null, 2)
-    }
-
-    return this.formatTable(query, results)
+    return formatResults(`Search results for ${query}`, results, (r) => {
+      const [from, to] = r.lines
+      const heading = r.headingPath ?? r.heading ?? '(intro)'
+      return [`${r.filename}:${from}-${to}`, heading]
+    })
   }
 
   @Cli('related/:id')
@@ -50,37 +49,26 @@ export class SearchController {
 
     const results = await ops.related(docId, parsedLimit)
 
-    if (results.length === 0) {
-      return 'No related documents found.'
-    }
+    if (results.length === 0) return 'No related documents found.'
+    if (format === 'json') return JSON.stringify(results, null, 2)
 
-    if (format === 'json') {
-      return JSON.stringify(results, null, 2)
-    }
-
-    return this.formatTable(`related to "${docId}"`, results)
+    return formatResults(`Related to "${docId}"`, results, (r) => [r.filename, r.title])
   }
+}
 
-  private formatTable(query: string, results: SearchResult[]): string {
-    const lines: string[] = []
-    lines.push(`Search results for ${query} (${results.length} results):`)
+function formatResults<T extends { score: number; snippet: string }>(
+  header: string,
+  results: T[],
+  describe: (r: T) => [primary: string, secondary: string],
+): string {
+  const lines: string[] = [`${header} (${results.length} results):`, '']
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i]
+    const [primary, secondary] = describe(r)
+    lines.push(`${i + 1}. ${primary}  (${r.score.toFixed(3)})`)
+    lines.push(`   ${secondary}`)
+    if (r.snippet) lines.push(`   ${r.snippet}`)
     lines.push('')
-
-    // Calculate dynamic column width for ID (never truncate)
-    const maxIdLen = Math.max(4, ...results.map(r => r.id.length))
-
-    lines.push(` # | Score | ${'ID'.padEnd(maxIdLen)} | Category | Title`)
-    lines.push(`---|-------|${''.padEnd(maxIdLen, '-')}--|----------|------`)
-
-    for (let i = 0; i < results.length; i++) {
-      const r = results[i]
-      const num = String(i + 1).padStart(2, ' ')
-      const score = r.score.toFixed(3).padStart(5, ' ')
-      const id = r.id.padEnd(maxIdLen)
-      const category = r.category.padEnd(8, ' ').slice(0, 8)
-      lines.push(`${num} | ${score} | ${id} | ${category} | ${r.title}`)
-    }
-
-    return lines.join('\n')
   }
+  return lines.join('\n').trimEnd()
 }

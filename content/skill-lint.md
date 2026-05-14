@@ -7,14 +7,25 @@ Two levels of maintenance: structural (automated) and semantic (agent-driven rev
 ## Level 1: Structural Lint (automated)
 
 ```bash
-kb lint
+kb lint [--format json]
 ```
 
 Reports:
+
+**Structural** (always actionable):
 - **broken** (error): links pointing to non-existent files
-- **orphan** (warning): docs with zero incoming links
 - **missing** (error): docs missing required frontmatter (id, title, category)
+- **corrupt-id** (error): an index row's id ends in `.md` — pre-fix versions of `kb` planted these when an agent passed `kb update foo.md` instead of `kb update foo`. `--fix` deletes the orphan row; `drift` re-indexes the canonical row.
 - **drift** (warning): index out of sync with file content
+- **orphan** (warning): docs with zero incoming links
+
+**Retrievability** (soft warnings — see *Frontmatter opt-outs* below):
+- **chunk-merge**: section will be auto-merged into the previous chunk (body under ~160 chars or >50% link syntax). Restructure, add to `important_sections` to preserve, or add to `suppress_merge_warn` to silence.
+- **long-paragraph**: single paragraph over 1500 chars. Cannot be subdivided by the chunker; risks truncation by the 512-token embedding model. Break into smaller paragraphs.
+- **doc-too-short**: body under ~200 words. Centroid embedding is noisy; either expand or fold into a larger doc.
+- **doc-too-long**: body over ~1500 words. Split into linked sub-docs (one topic each).
+
+`--format json` returns `{ issues: [...], fixed: N }` for programmatic consumption.
 
 ### Auto-fix
 
@@ -22,7 +33,33 @@ Reports:
 kb lint --fix
 ```
 
-Fixes broken links (removes dead links, keeps text) and drift (re-syncs index).
+Fixes broken links (removes dead links, keeps text), drift (re-syncs index), and corrupt-id (removes orphan rows). Retrievability warnings are author-decisions and never auto-fixed.
+
+### Frontmatter opt-outs
+
+Three frontmatter arrays let authors opt out of retrievability warnings when the structure is deliberate. Values are matched case-insensitively.
+
+```yaml
+important_sections:        # don't merge these sections even if short / link-heavy
+  - TL;DR
+  - Status
+
+suppress_merge_warn:       # merge is fine here, just stop warning about it
+  - See Also
+  - Contacts
+
+suppress_lint:             # silence doc-level soft warnings (justify in commit / log)
+  - doc-too-short          # e.g. intentional index page
+  - doc-too-long           # e.g. canonical reference that shouldn't split
+  - long-paragraph         # e.g. a deliberately unbroken transcript / quote
+  - chunk-merge            # silence ALL chunk-merge warnings for this doc
+```
+
+- `important_sections` *prevents* the merge (changes chunking behavior).
+- `suppress_merge_warn` lets the merge happen but silences the per-section warning.
+- `suppress_lint` silences doc-level soft warnings — use only when there's a deliberate reason and note it (e.g. via `kb log add --op lint --details "..."`).
+
+Structural issues (broken, missing) are never suppressible — they're real bugs.
 
 ### Fixing orphans
 

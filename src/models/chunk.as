@@ -9,10 +9,18 @@ export interface Chunk {
 
     heading?: string
 
-    @db.index.fulltext 'chunk_search', 1
-    content: string
+    headingPath?: string
+
+    headingLevel?: number
+
+    fromLine: number
+
+    toLine: number
 
     position: number
 
     contentHash: string
+
+    @db.search.vector 768, 'cosine'
+    embedding?: number[]
 }

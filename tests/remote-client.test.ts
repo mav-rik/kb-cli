@@ -75,6 +75,45 @@ describe('RemoteClient', () => {
     expect(body).toEqual({ title: 'Test', category: 'notes', tags: ['a'], content: 'body', wiki: 'mywiki' })
   })
 
+  it('addDoc forwards dryRun flag', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ dryRun: true, id: 'x', filename: 'x.md', issues: [] }))
+
+    await client.addDoc('http://localhost:3000', 'mywiki', {
+      title: 'Test',
+      category: 'notes',
+      content: 'body',
+      dryRun: true,
+    })
+
+    const [, opts] = mockFetch.mock.calls[0]
+    const body = JSON.parse(opts.body)
+    expect(body.dryRun).toBe(true)
+  })
+
+  it('reindexDoc sends POST to /reindex/:id', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ id: 'foo', filename: 'foo.md' }))
+
+    await client.reindexDoc('http://localhost:3000', 'mywiki', 'foo')
+
+    const [url, opts] = mockFetch.mock.calls[0]
+    expect(url).toContain('/reindex/foo')
+    expect(url).toContain('wiki=mywiki')
+    expect(opts.method).toBe('POST')
+  })
+
+  it('updateDoc forwards dryRun flag', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ dryRun: true, id: 'x', filename: 'x.md', issues: [] }))
+
+    await client.updateDoc('http://localhost:3000', 'mywiki', 'x', {
+      append: 'more',
+      dryRun: true,
+    })
+
+    const [, opts] = mockFetch.mock.calls[0]
+    const body = JSON.parse(opts.body)
+    expect(body.dryRun).toBe(true)
+  })
+
   it('sets Authorization header when secret provided', async () => {
     mockFetch.mockResolvedValue(jsonResponse({ status: 'ok' }))
 
@@ -157,5 +196,57 @@ describe('RemoteClient', () => {
     expect(url).toContain('limit=5')
     expect(result).toHaveLength(1)
     expect(result[0].operation).toBe('add')
+  })
+
+  it('wikiInfo fetches GET /api/wiki/:name', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ name: 'docs', docCount: 12, sizeBytes: 4096, lastUpdated: '2025-01-01T00:00:00.000Z' }))
+
+    const result = await client.wikiInfo('http://localhost:3000', 'docs', 'my-secret')
+
+    const url = mockFetch.mock.calls[0][0] as string
+    expect(url).toBe('http://localhost:3000/api/wiki/docs')
+    const opts = mockFetch.mock.calls[0][1]
+    expect(opts.headers['Authorization']).toBe('Bearer my-secret')
+    expect(result.docCount).toBe(12)
+    expect(result.name).toBe('docs')
+  })
+
+  it('skill fetches GET /api/skill with optional workflow', async () => {
+    mockFetch.mockResolvedValue(textResponse('# Skill content'))
+
+    const result = await client.skill('http://localhost:3000', 'ingest')
+
+    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/api/skill?workflow=ingest')
+    expect(result).toBe('# Skill content')
+  })
+
+  it('skill omits query string when no workflow', async () => {
+    mockFetch.mockResolvedValue(textResponse('# Full skill'))
+
+    await client.skill('http://localhost:3000')
+
+    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/api/skill')
+  })
+
+  it('search returns chunk-grained shape (filename + lines + heading) over the wire', async () => {
+    mockFetch.mockResolvedValue(jsonResponse([
+      {
+        filename: 'foo.md',
+        title: 'Foo',
+        category: 'notes',
+        heading: 'Intro',
+        headingPath: 'Foo > Intro',
+        lines: [10, 25],
+        score: 0.987,
+        snippet: 'snippet text',
+      },
+    ]))
+
+    const results = await client.search('http://localhost:3000', 'docs', 'hello', 5, 'hybrid')
+
+    expect(results).toHaveLength(1)
+    expect(results[0].filename).toBe('foo.md')
+    expect(results[0].lines).toEqual([10, 25])
+    expect(results[0].headingPath).toBe('Foo > Intro')
   })
 })

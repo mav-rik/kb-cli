@@ -18,53 +18,10 @@ import { isAllowedDuringMigration } from './migration-gate.js'
 
 @Controller()
 class AppController {
-  @Cli('')
-  @Description('Show help')
-  root() {
-    const lines = [
-      'kb — Wiki CLI for AI agents',
-      '',
-      'Usage: kb <command> [options]',
-      '',
-      'Commands:',
-      '  search <query>     Search documents (hybrid semantic + keyword)',
-      '  read <file>        Read a document (--lines, --meta, --links, --follow)',
-      '  add                Add a new document',
-      '  update <id>        Update a document',
-      '  delete <id>        Delete a document',
-      '  rename <old> <new> Rename and update links',
-      '  list               List documents (--category, --tag)',
-      '  categories         List categories in use',
-      '  related <id>       Find related documents',
-      '  lint               Check wiki integrity (--fix)',
-      '  reindex            Rebuild index from files',
-      '  toc                Show table of contents',
-      '  log                Show recent activity log',
-      '  log add            Record a manual log entry (agent sessions)',
-      '  schema             Show wiki schema (structure, conventions)',
-      '  schema update      Regenerate schema from current state',
-      '  wiki <cmd>         Manage wikis (create/list/info/delete/use)',
-      '  remote <cmd>       Manage remote KBs (add/remove/list/connect/attach)',
-      '  config <cmd>       Manage configuration (get/set/list)',
-      '  skill [workflow]   Show agent instructions',
-      '  setup              Install agent integrations',
-      '  serve              Start HTTP API server (--port, --detached, --log, --stop)',
-      '  migrate            Upgrade local schema/embeddings (--dry-run, --yes, --wiki)',
-      '  status             Show local environment status (server, config, wikis)',
-      '  version            Show version',
-      '',
-      'Global options:',
-      '  --wiki, -w <name>  Target wiki (default: from kb.config.json or "default")',
-      '  --format json      Machine-readable output',
-      '  --help             Show help for a command',
-    ]
-    return lines.join('\n')
-  }
-
   @Cli('version')
   @Description('Show version')
   version() {
-    return '0.2.1'
+    return __VERSION__
   }
 
   @Cli('serve')
@@ -220,6 +177,12 @@ if (services.migration.detectNeeded() && !isAllowedDuringMigration(process.argv)
   if (cmd !== 'serve') {
     await services.localServer.refresh()
   }
+}
+
+// No-args invocation falls through to the cliHelpInterceptor (installed by
+// useHelp below) — gives identical output to `kb --help`.
+if (process.argv.length <= 2) {
+  process.argv.push('--help')
 }
 
 new CliApp()

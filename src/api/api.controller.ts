@@ -1,15 +1,16 @@
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 import { Controller, Param } from 'moost'
 import { Get, Post, Put, Delete, Body, Query, SetStatus } from '@moostjs/event-http'
 import { services } from '../services/container.js'
-import { slugify, toFilename, toDocId, today, parseLineRange } from '../utils/slug.js'
+import { toFilename, canonicalize, parseLineRange } from '../utils/slug.js'
 import { readContent } from '../utils/content.js'
-import { DocFrontmatter } from '../services/parser.service.js'
+import { LocalWikiOps } from '../services/wiki-ops.js'
 
 function sliceLines(content: string, lines?: string): string {
   if (!lines) return content
-  const allLines = content.split('\n')
-  const { start, end } = parseLineRange(lines, allLines.length)
-  return allLines.slice(start - 1, end).join('\n')
+  const { start, end } = parseLineRange(lines)
+  return content.split('\n').slice(start - 1, end).join('\n')
 }
 
 @Controller('api')
@@ -29,13 +30,15 @@ export class ApiController {
   root() {
     return {
       name: 'kb',
-      version: '0.1.0',
+      version: __VERSION__,
       endpoints: [
         'GET  /api/health',
         'GET  /api/search?q=&wiki=&limit=&mode=fts|vec|hybrid',
         'GET  /api/read/:id?wiki=&lines=&meta=true&links=true&format=json',
-        'POST /api/docs  { title, category, tags[], body|content|text, wiki? }',
-        'PUT  /api/docs/:id  { title?, category?, tags?, body?, append?, wiki? }',
+        'GET  /api/read-slice/:id?wiki=&from=&to=',
+        'GET  /api/resolve/:input?wiki=  → { id, filename, exists, title?, category?, suggestions[] }',
+        'POST /api/docs  { title, category, tags[], body|content|text, dryRun?, wiki? } → { id, filename, issues[] }',
+        'PUT  /api/docs/:id  { title?, category?, tags?, body?, append?, dryRun?, wiki? } → { id, filename, issues[] }',
         'DELETE /api/docs/:id?wiki=',
         'GET  /api/docs?wiki=&category=&tag=  (alias: /api/list)',
         'GET  /api/related/:id?wiki=&limit=  (alias: /api/docs/:id/related)',
@@ -44,11 +47,13 @@ export class ApiController {
         'GET  /api/lint?wiki=',
         'POST /api/lint/fix?wiki=',
         'POST /api/reindex?wiki=',
+        'POST /api/reindex/:id?wiki=',
         'GET  /api/toc?wiki=',
         'GET  /api/schema?wiki=',
         'POST /api/schema?wiki=',
         'GET  /api/log?wiki=&limit=',
         'GET  /api/wiki  (alias: /api/wikis)',
+        'GET  /api/wiki/:name',
         'POST /api/wiki  { name }',
         'PUT  /api/wiki/use/:name',
         'DELETE /api/wiki/:name',
@@ -78,7 +83,7 @@ export class ApiController {
   @Get('read/:filename')
   async read(@Param('filename') filename: string, @Query('wiki') wiki: string, @Query('lines') lines: string, @Query('format') format: string, @Query('meta') meta: string, @Query('links') links: string) {
     const resolvedWiki = this.config.resolveWikiName(wiki)
-    const targetPath = toFilename(filename)
+    const targetPath = canonicalize(filename).filename
 
     if (!this.storage.docExists(resolvedWiki, targetPath)) {
       return { error: `Document "${targetPath}" not found in wiki "${resolvedWiki}".` }
@@ -102,75 +107,90 @@ export class ApiController {
     return sliceLines(this.storage.readRaw(resolvedWiki, targetPath), lines)
   }
 
+  @Get('resolve/:input')
+  async resolve(@Param('input') input: string, @Query('wiki') wiki: string) {
+    const wikiName = this.config.resolveWikiName(wiki)
+    return this.localOps(wikiName).resolve(input)
+  }
+
+  @Get('read-slice/:filename')
+  async readSlice(@Param('filename') filename: string, @Query('wiki') wiki: string, @Query('from') from: string, @Query('to') to: string) {
+    const resolvedWiki = this.config.resolveWikiName(wiki)
+    const targetPath = canonicalize(filename).filename
+
+    if (!this.storage.docExists(resolvedWiki, targetPath)) {
+      return { error: `Document "${targetPath}" not found in wiki "${resolvedWiki}".` }
+    }
+
+    return this.storage.readSlice(resolvedWiki, targetPath, parseInt(from, 10) || 1, parseInt(to, 10) || Infinity)
+  }
+
   // ─── Documents CRUD ───────────────────────────────────────────────────────
 
   @Post('docs')
   @SetStatus(201)
-  async addDoc(@Body() body: { title: string; category: string; tags?: string[]; content?: string; body?: string; text?: string; wiki?: string }) {
+  async addDoc(@Body() body: {
+    title: string
+    category: string
+    tags?: string[]
+    content?: string
+    body?: string
+    text?: string
+    dryRun?: boolean
+    wiki?: string
+  }) {
     const wikiName = this.config.resolveWikiName(body.wiki)
-    const id = slugify(body.title)
-    const filename = `${id}.md`
-
-    if (this.storage.docExists(wikiName, filename)) {
-      return { error: `Document "${filename}" already exists in wiki "${wikiName}".` }
+    const content = body.content || body.body || body.text || ''
+    try {
+      return await this.localOps(wikiName).addDoc(body.title, body.category, body.tags || [], content, { dryRun: body.dryRun })
+    } catch (err: any) {
+      return { error: err.message }
     }
-
-    const docContent = body.content || body.body || body.text || ''
-
-    const frontmatter: DocFrontmatter = {
-      id,
-      title: body.title,
-      category: body.category,
-      tags: body.tags || [],
-      created: today(),
-      updated: today(),
-    }
-
-    this.storage.writeDoc(wikiName, filename, frontmatter, docContent)
-    await this.workflow.indexAndEmbed(wikiName, id, frontmatter, docContent, filename)
-
-    return { id, filename }
   }
 
   @Put('docs/:id')
-  async updateDoc(@Param('id') id: string, @Body() body: { title?: string; category?: string; tags?: string[]; content?: string; body?: string; text?: string; append?: string; wiki?: string }) {
+  async updateDoc(@Param('id') id: string, @Body() body: {
+    title?: string
+    category?: string
+    tags?: string[]
+    content?: string
+    body?: string
+    text?: string
+    append?: string
+    dryRun?: boolean
+    wiki?: string
+  }) {
     const wikiName = this.config.resolveWikiName(body.wiki)
-    const filename = toFilename(id)
-    const docId = toDocId(filename)
-
-    if (!this.storage.docExists(wikiName, filename)) {
-      return { error: `Document "${filename}" not found in wiki "${wikiName}".` }
-    }
-
-    const doc = this.storage.readDoc(wikiName, filename)
-
-    const frontmatter: DocFrontmatter = {
-      ...doc.frontmatter,
-      ...(body.title !== undefined && { title: body.title }),
-      ...(body.category !== undefined && { category: body.category }),
-      ...(body.tags !== undefined && { tags: body.tags }),
-      updated: today(),
-    }
-
+    const patch: { title?: string; category?: string; tags?: string[]; content?: string; append?: string } = {}
+    if (body.title !== undefined) patch.title = body.title
+    if (body.category !== undefined) patch.category = body.category
+    if (body.tags !== undefined) patch.tags = body.tags
     const newContent = body.content ?? body.body ?? body.text
-    let docBody = doc.body
-    if (newContent !== undefined) {
-      docBody = newContent
-    } else if (body.append !== undefined) {
-      docBody = docBody + body.append
+    if (newContent !== undefined) patch.content = newContent
+    if (body.append !== undefined) patch.append = body.append
+    try {
+      return await this.localOps(wikiName).updateDoc(id, patch, { dryRun: body.dryRun })
+    } catch (err: any) {
+      return { error: err.message }
     }
+  }
 
-    this.storage.writeDoc(wikiName, filename, frontmatter, docBody)
-    await this.workflow.indexAndEmbed(wikiName, docId, frontmatter, docBody, filename)
-
-    return { id: docId, filename }
+  private localOps(wikiName: string) {
+    return new LocalWikiOps(wikiName, {
+      storage: services.storage,
+      search: services.search,
+      index: services.index,
+      workflow: services.docWorkflow,
+      schema: services.schema,
+      activityLog: services.activityLog,
+      parser: services.parser,
+    })
   }
 
   @Delete('docs/:id')
   async deleteDoc(@Param('id') id: string, @Query('wiki') wiki: string) {
     const wikiName = this.config.resolveWikiName(wiki)
-    const filename = toFilename(id)
-    const docId = toDocId(filename)
+    const { id: docId, filename } = canonicalize(id)
 
     if (!this.storage.docExists(wikiName, filename)) {
       return { error: `Document "${filename}" not found in wiki "${wikiName}".` }
@@ -179,7 +199,7 @@ export class ApiController {
     const backlinks = await this.index.getLinksTo(wikiName, docId)
     const warnings: string[] = []
     if (backlinks.length > 0) {
-      const sources = backlinks.map((l) => `${l.fromId}.md`)
+      const sources = backlinks.map((l) => toFilename(l.fromId))
       warnings.push(`${backlinks.length} document(s) have broken links to ${filename}: ${sources.join(', ')}`)
     }
 
@@ -194,26 +214,25 @@ export class ApiController {
   async related(@Param('id') id: string, @Query('wiki') wiki: string, @Query('limit') limit: string) {
     const resolvedWiki = this.config.resolveWikiName(wiki)
     const parsedLimit = limit ? parseInt(limit, 10) : 10
-    const filename = toFilename(id)
-    const docId = toDocId(filename)
+    const { id: docId, filename } = canonicalize(id)
 
     if (!this.storage.docExists(resolvedWiki, filename)) {
       return { error: `Document "${filename}" not found in wiki "${resolvedWiki}".` }
     }
 
     const scored = await this.workflow.findRelated(resolvedWiki, docId, filename, parsedLimit)
-    return this.searchService.buildResults(resolvedWiki, scored)
+    return this.searchService.buildRelatedResults(resolvedWiki, scored)
   }
 
   @Post('docs/:id/rename')
   async renameDoc(@Param('id') id: string, @Body() body: { newId?: string; to?: string; name?: string; wiki?: string }) {
     const wikiName = this.config.resolveWikiName(body.wiki)
-    const oldFilename = toFilename(id)
-    const newId = body.newId || body.to || body.name
-    if (!newId) {
+    const { id: oldId, filename: oldFilename } = canonicalize(id)
+    const rawNewId = body.newId || body.to || body.name
+    if (!rawNewId) {
       return { error: 'Missing "newId" (or "to") in request body.' }
     }
-    const newFilename = toFilename(newId)
+    const { id: newId, filename: newFilename } = canonicalize(rawNewId)
 
     if (!this.storage.docExists(wikiName, oldFilename)) {
       return { error: `Document "${oldFilename}" not found in wiki "${wikiName}".` }
@@ -223,9 +242,9 @@ export class ApiController {
       return { error: `Document "${newFilename}" already exists in wiki "${wikiName}".` }
     }
 
-    const linksUpdated = await this.workflow.rename(wikiName, toDocId(oldFilename), newId, oldFilename, newFilename)
+    const linksUpdated = await this.workflow.rename(wikiName, oldId, newId, oldFilename, newFilename)
 
-    return { oldId: id, newId, linksUpdated }
+    return { oldId, newId, linksUpdated }
   }
 
   @Get('docs')
@@ -250,6 +269,31 @@ export class ApiController {
   @Get('wikis')
   listWikis() {
     return this.wikiMgmt.list()
+  }
+
+  @Get('wiki/:name')
+  wikiInfo(@Param('name') name: string) {
+    if (!this.wikiMgmt.exists(name)) {
+      return { error: `Wiki "${name}" does not exist.` }
+    }
+    const docsDir = this.storage.getDocsDir(name)
+    let sizeBytes = 0
+    let lastMs = 0
+    let files: string[] = []
+    try {
+      files = fs.readdirSync(docsDir).filter((f) => f.endsWith('.md'))
+      for (const f of files) {
+        const stat = fs.statSync(path.join(docsDir, f))
+        sizeBytes += stat.size
+        if (stat.mtimeMs > lastMs) lastMs = stat.mtimeMs
+      }
+    } catch {}
+    return {
+      name,
+      docCount: files.length,
+      sizeBytes,
+      lastUpdated: lastMs ? new Date(lastMs).toISOString() : null,
+    }
   }
 
   @Post('wiki')
@@ -285,6 +329,16 @@ export class ApiController {
   async reindex(@Query('wiki') wiki: string) {
     const wikiName = this.config.resolveWikiName(wiki)
     return this.workflow.reindex(wikiName)
+  }
+
+  @Post('reindex/:id')
+  async reindexDoc(@Param('id') id: string, @Query('wiki') wiki: string) {
+    const wikiName = this.config.resolveWikiName(wiki)
+    try {
+      return await this.localOps(wikiName).reindexDoc(id)
+    } catch (err: any) {
+      return { error: err.message }
+    }
   }
 
   // ─── Table of Contents ────────────────────────────────────────────────────

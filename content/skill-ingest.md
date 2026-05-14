@@ -65,13 +65,19 @@ kb categories
 kb schema
 ```
 
-Create the document:
+**Iterate with `--dry-run` first.** `kb add --dry-run` returns the per-doc lint result (chunk-merge, long-paragraph, doc-too-short, doc-too-long, missing frontmatter) without writing or indexing. Use it to catch retrievability issues before the doc lands in search:
 
 ```bash
+kb add --title "Descriptive Title" --category <category> --tags "tag1,tag2" --content "..." --dry-run
+# Reshape content / add important_sections / suppress_lint, repeat until clean.
+
 kb add --title "Descriptive Title" --category <category> --tags "tag1,tag2" --content "content with [links](./related-doc.md)"
+# Real run also returns lint warnings (always-on), so you'll see anything left over.
 ```
 
 For large content, use `--file <path>` or pipe via `--stdin`.
+
+`kb update --dry-run` works the same way — applies the patch (`--content` or `--append`) in memory, lints the merged result, and returns the issues without touching the index.
 
 ---
 
@@ -201,3 +207,14 @@ Should report no broken links or drift.
 - **Attribute when relevant**: "According to [source], ..." — but don't over-cite
 - **Keep it current**: write as if the page will be read months later. Avoid "recently" or "last week" — use dates.
 - **Front-load**: put the most important information first. Details and nuance below.
+
+## Writing for chunked retrieval
+
+Docs are split into chunks by H2/H3 heading at index time; each chunk is independently searchable. This shapes how you should structure new pages:
+
+- **Sections substantive** — at least ~80 words and a topic sentence that restates the subject in plain words (the embedding model anchors on opening tokens; pronouns retrieve poorly).
+- **Doc length 200-1500 words** — below 200 the centroid is noisy; above 1500 split into linked sub-docs.
+- **Avoid paragraphs over 1500 chars** — they can't be subdivided and risk truncation by the 512-token embedding window.
+- **Trivial sections auto-merge** — bodies under ~160 chars or with >50% link syntax fold into the previous chunk. Use `important_sections` (preserve) / `suppress_merge_warn` (silence warning) / `suppress_lint` (silence doc-level soft warnings) in frontmatter when the structure is deliberate.
+
+After ingesting, `kb lint` will flag `chunk-merge`, `long-paragraph`, `doc-too-short`, `doc-too-long` so you can react before the doc lands in the index. See `kb skill update` for the full retrieval-authoring guide and `kb skill lint` for opt-out semantics.

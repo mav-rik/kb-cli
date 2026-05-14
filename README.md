@@ -60,6 +60,10 @@ pnpm rebuild -g
 kb wiki create my-wiki       # create a wiki
 kb wiki use my-wiki          # set as default
 
+# --dry-run lints the content first without writing — recommended for agents.
+kb add --title "Docker Basics" --category concepts --tags "docker,containers" \
+  --content "Docker packages applications into containers..." --dry-run
+
 kb add --title "Docker Basics" --category concepts --tags "docker,containers" \
   --content "Docker packages applications into containers..."
 
@@ -74,12 +78,17 @@ kb lint
 To bind a wiki to a specific project directory:
 
 ```bash
-kb setup --agents claude     # install for Claude Code (skill + slash commands)
-kb setup --agents cursor     # install for Cursor (.mdc rules)
-kb setup --all               # install for all supported agents
+kb setup --agents claude     # Claude Code: skill + slash commands + CLAUDE.md memo
+kb setup --agents cursor     # Cursor: .mdc rules + AGENTS.md memo
+kb setup --all               # all agents (project-local)
+
+kb setup --agents claude --global   # user-scope: ~/.claude/CLAUDE.md
+kb setup --agents codex  --global   # user-scope: ~/.codex/AGENTS.md
 ```
 
-This creates `kb.config.json` in your project root:
+Setup writes a short "kb exists, run `kb skill`" memo into CLAUDE.md (for Claude) or AGENTS.md (for other agents), wrapped in `<!-- kb-cli:start --> ... <!-- kb-cli:end -->` markers. Re-running `kb setup` rewrites the block in place; delete the block manually to uninstall.
+
+Project-local also creates `kb.config.json`:
 
 ```json
 {
@@ -91,33 +100,33 @@ Any `kb` command run within this directory (or subdirectories) will use that wik
 
 ### Supported agents
 
-| Agent | What gets installed |
-|-------|-------------------|
-| Claude Code | `.claude/skills/` + `.claude/commands/` |
-| Cursor | `.cursor/rules/kb.mdc` |
-| Codex CLI | `AGENTS.md` section |
-| Cline | `.clinerules` append |
-| Windsurf | `.windsurfrules` append |
-| Continue.dev | `.continue/rules/` |
+| Agent | Project install | Global install |
+|-------|----------------|----------------|
+| Claude Code | `.claude/skills/` + `.claude/commands/` + `CLAUDE.md` memo | `~/.claude/skills/` + `~/.claude/commands/` + `~/.claude/CLAUDE.md` memo |
+| Cursor | `.cursor/rules/kb.mdc` + `AGENTS.md` memo | n/a (workspace-only) |
+| Codex CLI | `AGENTS.md` memo | `~/.codex/AGENTS.md` memo |
+| Cline | `AGENTS.md` memo | n/a (workspace-only) |
+| Windsurf | `AGENTS.md` memo | n/a (workspace-only) |
+| Continue.dev | `.continue/rules/kb.md` + `AGENTS.md` memo | n/a (workspace-only) |
 
 ## Commands
 
 ```
 kb search <query>        Hybrid search (--mode hybrid|fts|vec, --limit, --format json)
 kb read <file>           Read document (--lines, --meta, --links, --follow); alias: kb get
-kb add                   Add document (--title, --category, --tags, --content/--file/--stdin)
-kb update <id>           Update document (--content, --append, --title, --category, --tags)
+kb resolve <arg>         Resolve any handle (id, .md, ./path, full path) → canonical id + suggestions
+kb add                   Add document (--content/--file/--stdin, --dry-run, --format json)
+kb update <id>           Update document (--content, --append, --dry-run, --format json)
 kb delete <id>           Delete document
 kb rename <old> <new>    Rename with automatic link updates
 kb list                  List documents (--category, --tag, --format json)
 kb categories            List categories in use
 kb related <id>          Find semantically similar documents
-kb lint [--fix]          Check integrity (broken links, orphans, drift)
-kb reindex               Rebuild index from markdown files (run after switching embedding model)
+kb lint [--fix]          Check integrity + retrievability (--format json)
+kb reindex [<id>]        Rebuild index — whole wiki, or a single doc by id
 kb toc                   Table of contents
-kb schema                Show wiki schema (structure, conventions)
-kb schema update         Regenerate schema
-kb log                   Recent activity log
+kb schema [update]       Show / regenerate wiki schema
+kb log [add]             Recent activity log; `add` records an agent session entry
 kb migrate               Upgrade local schema/embeddings (--dry-run, --yes, --wiki)
 kb status                Show local environment status (server, config, wikis)
 kb wiki create/list/use/delete/info   Manage wikis
@@ -128,6 +137,40 @@ kb serve [--port 4141 --secret <s> --detached --log <path> --stop]   HTTP API se
 kb remote add/remove/list/connect        Manage remote KBs
 kb remote attach/detach/wikis            Manage remote wiki access
 ```
+
+Run any command with `--help` to see full option details.
+
+### Doc handles
+
+Every command that takes a doc handle (`read`, `update`, `delete`, `rename`, `related`, `reindex`, `resolve`) accepts any of: bare id (`foo`), filename form (`foo.md`), markdown-link form (`./foo.md`), full path (`/Users/me/.kb/wiki/docs/foo.md`), or any case (`FOO.md`). All forms normalize to the canonical lowercase id internally — same effect, no duplicate index rows. Use `kb resolve <arg>` when an id doesn't match: it returns the canonical form, file existence, and fuzzy suggestions.
+
+## Writing for retrieval
+
+Docs are chunked by heading at index time and each chunk is searched
+independently — so structure matters. Two checks help you keep docs
+retrievable; both are surfaced by `kb lint` and by `kb add` / `kb update`
+(always, plus `--dry-run` to preview without writing or indexing):
+
+| Warning | Threshold | Meaning |
+|--|--|--|
+| `chunk-merge` | section body <160 chars, or >50% link syntax | Section will auto-merge into the previous chunk |
+| `long-paragraph` | paragraph >1500 chars | Can't be subdivided, risks embedding truncation |
+| `doc-too-short` | <200 words | Centroid embedding is noisy |
+| `doc-too-long` | >1500 words | Split into linked sub-docs |
+
+Three frontmatter fields opt-out per doc, all matched case-insensitively:
+
+```yaml
+important_sections:    # prevent auto-merge of these short-but-critical sections
+  - TL;DR
+  - Status
+suppress_merge_warn:   # let the merge happen, just stop warning about it
+  - See Also
+suppress_lint:         # silence doc-level soft warnings
+  - doc-too-short      # e.g. an intentionally short index page
+```
+
+Structural errors (broken links, missing frontmatter) are never suppressible.
 
 ## Speed up: run a local server
 

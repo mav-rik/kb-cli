@@ -52,6 +52,17 @@ export class RemoteClient {
     return this.get(url, '/wiki', secret)
   }
 
+  async wikiInfo(url: string, name: string, secret?: string): Promise<{ name: string; docCount: number; sizeBytes: number; lastUpdated: string | null }> {
+    return this.get(url, `/wiki/${encodeURIComponent(name)}`, secret)
+  }
+
+  async skill(url: string, workflow?: string, secret?: string): Promise<string | { error: string }> {
+    const params = new URLSearchParams()
+    if (workflow) params.set('workflow', workflow)
+    const qs = params.toString()
+    return this.get(url, `/skill${qs ? `?${qs}` : ''}`, secret)
+  }
+
   async search(url: string, wiki: string, query: string, limit: number, mode: SearchMode, secret?: string) {
     const params = new URLSearchParams({ q: query, limit: String(limit), mode, wiki })
     return this.get(url, `/search?${params}`, secret)
@@ -66,11 +77,21 @@ export class RemoteClient {
     return this.get(url, `/read/${encodeURIComponent(filename)}?${params}`, secret)
   }
 
-  async addDoc(url: string, wiki: string, doc: { title: string; category: string; tags?: string[]; content?: string }, secret?: string) {
+  async resolve(url: string, wiki: string, input: string, secret?: string) {
+    const params = new URLSearchParams({ wiki })
+    return this.get(url, `/resolve/${encodeURIComponent(input)}?${params}`, secret)
+  }
+
+  async readSlice(url: string, wiki: string, filename: string, fromLine: number, toLine: number, secret?: string) {
+    const params = new URLSearchParams({ wiki, from: String(fromLine), to: String(toLine) })
+    return this.get(url, `/read-slice/${encodeURIComponent(filename)}?${params}`, secret)
+  }
+
+  async addDoc(url: string, wiki: string, doc: { title: string; category: string; tags?: string[]; content?: string; dryRun?: boolean }, secret?: string) {
     return this.post(url, '/docs', { ...doc, wiki }, secret)
   }
 
-  async updateDoc(url: string, wiki: string, id: string, patch: { title?: string; category?: string; tags?: string[]; content?: string; append?: string }, secret?: string) {
+  async updateDoc(url: string, wiki: string, id: string, patch: { title?: string; category?: string; tags?: string[]; content?: string; append?: string; dryRun?: boolean }, secret?: string) {
     return this.put(url, `/docs/${encodeURIComponent(id)}`, { ...patch, wiki }, secret)
   }
 
@@ -109,6 +130,11 @@ export class RemoteClient {
   async reindex(url: string, wiki: string, secret?: string) {
     const params = new URLSearchParams({ wiki })
     return this.post(url, `/reindex?${params}`, {}, secret)
+  }
+
+  async reindexDoc(url: string, wiki: string, id: string, secret?: string) {
+    const params = new URLSearchParams({ wiki })
+    return this.post(url, `/reindex/${encodeURIComponent(id)}?${params}`, {}, secret)
   }
 
   async categories(url: string, wiki: string, secret?: string) {

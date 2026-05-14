@@ -5,19 +5,25 @@
       "source": "moostjs/atscript",
       "sourceType": "github",
       "skillPath": "skills/atscript/SKILL.md",
-      "computedHash": "f59740d00fc3805fa365a1026421e9299ad689cada5d05d3e7d3be1741ccaa8f"
+      "computedHash": "153fe7576f73180006c37ede529f1b229d55d2d8f3436dd288b86c81750e4ab9"
     },
     "atscript-db": {
       "source": "moostjs/atscript-db",
       "sourceType": "github",
       "skillPath": "skills/atscript-db/SKILL.md",
-      "computedHash": "8cd355bfaaa58f374e17e23653700fa69b021f4adac063f78e0ba1ce2050c9f6"
+      "computedHash": "82dcc6a951399ab42d83e765d7bf8cf681682d96eb93e6a10ca502ec7441e109"
     },
     "moostjs": {
       "source": "moostjs/moostjs",
       "sourceType": "github",
       "skillPath": "skills/moostjs/SKILL.md",
       "computedHash": "9e022e59813c7027ce50f88e78f4e299a60ebea5fcce2fc5137a675d91c5dd61"
+    },
+    "wooksjs": {
+      "source": "wooksjs/wooksjs",
+      "sourceType": "github",
+      "skillPath": "skills/wooksjs/SKILL.md",
+      "computedHash": "286561edaf96fdca2cd713bcb41e29d690df86e0cd33acb792c8ed0bae905df7"
     }
   }
 }

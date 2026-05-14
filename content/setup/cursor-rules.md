@@ -25,7 +25,8 @@ Run `kb skill` in the terminal for full instructions. Key commands:
 1. Search before adding to avoid duplicates
 2. Cross-link related docs with `[text](./file.md)` links
 3. After any change, check related docs for contradictions
-4. Keep docs 50-500 lines, one concept per doc
+4. Keep docs ~200-1500 words, one concept per doc; ≥80 words per H2/H3 section; paragraphs under 1500 chars
 5. Discuss key takeaways with user before ingesting
 6. Resolve contradictions: recency → authority → specificity
 7. Log session summaries after ingest/lint
+8. Docs are chunked by heading at index time. Sections under ~160 chars or >50% link syntax auto-merge into the previous chunk. `kb lint` flags `chunk-merge`, `long-paragraph`, `doc-too-short`, `doc-too-long`. Frontmatter opt-outs (use deliberately): `important_sections` (preserve named sections), `suppress_merge_warn` (silence per-section warning), `suppress_lint` (silence doc-level soft warnings)

@@ -18,3 +18,4 @@ Rules:
 - Discuss key takeaways with user before ingesting new sources.
 - Resolve contradictions using recency → authority → specificity.
 - Log session summaries after ingest/lint.
+- Write for chunked retrieval: target ~200-1500 words per doc, ≥80 words per H2/H3 section, paragraphs under 1500 chars. Short/link-heavy sections auto-merge. `kb lint` flags `chunk-merge`, `long-paragraph`, `doc-too-short`, `doc-too-long`. Frontmatter opt-outs: `important_sections`, `suppress_merge_warn`, `suppress_lint` (run `kb skill update` for details).

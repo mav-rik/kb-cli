@@ -1,6 +1,8 @@
-import type { SearchMode, SearchResult } from './search.service.js'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+import type { SearchMode, SearchResult, RelatedResult } from './search.service.js'
 import type { LintIssue, ReindexResult } from './doc-workflow.service.js'
-import type { ParsedDoc, DocFrontmatter } from './parser.service.js'
+import type { ParsedDoc, DocFrontmatter, ParserService } from './parser.service.js'
 import type { RemoteClient } from './remote-client.js'
 import type { StorageService } from './storage.service.js'
 import type { SearchService } from './search.service.js'
@@ -8,7 +10,7 @@ import type { IndexService } from './index.service.js'
 import type { DocWorkflowService } from './doc-workflow.service.js'
 import type { SchemaService } from './schema.service.js'
 import type { ActivityLogService } from './activity-log.service.js'
-import { slugify, toFilename, toDocId, today } from '../utils/slug.js'
+import { slugify, toFilename, canonicalize, normalizeDocId, today } from '../utils/slug.js'
 
 export interface UpdatePatch {
   title?: string
@@ -30,26 +32,61 @@ export interface TocResult {
   categories: Record<string, { id: string; title: string; filePath: string }[]>
 }
 
+export interface ReadSliceResult {
+  filename: string
+  fromLine: number
+  toLine: number
+  totalLines: number
+  content: string
+}
+
+export interface WikiInfo {
+  name: string
+  docCount: number
+  sizeBytes: number
+  lastUpdated: string | null
+}
+
+export interface WriteResult {
+  id: string
+  filename: string
+  issues: LintIssue[]
+}
+
+export interface ResolveResult {
+  input: string
+  id: string
+  filename: string
+  exists: boolean
+  title?: string
+  category?: string
+  suggestions: string[]
+}
+
 export interface WikiOps {
   search(query: string, limit: number, mode: SearchMode): Promise<SearchResult[]>
   docExists(filename: string): Promise<boolean>
   readRaw(filename: string): Promise<string>
   readDoc(filename: string): Promise<ParsedDoc>
-  addDoc(title: string, category: string, tags: string[], content: string): Promise<{ id: string; filename: string }>
-  updateDoc(id: string, patch: UpdatePatch): Promise<{ id: string; filename: string }>
+  readSlice(filename: string, fromLine: number, toLine: number): Promise<ReadSliceResult>
+  addDoc(title: string, category: string, tags: string[], content: string, opts?: { dryRun?: boolean }): Promise<WriteResult>
+  updateDoc(id: string, patch: UpdatePatch, opts?: { dryRun?: boolean }): Promise<WriteResult>
   deleteDoc(id: string): Promise<{ deleted: string; warnings: string[] }>
   rename(oldId: string, newId: string): Promise<{ oldId: string; newId: string; linksUpdated: number }>
   listDocs(filters?: { category?: string; tag?: string }): Promise<DocEntry[]>
   categories(): Promise<string[]>
-  related(id: string, limit: number): Promise<SearchResult[]>
+  related(id: string, limit: number): Promise<RelatedResult[]>
   lint(): Promise<LintIssue[]>
   lintFix(): Promise<{ fixed: number }>
-  reindex(): Promise<ReindexResult>
+  reindex(onProgress?: (current: number, total: number) => void): Promise<ReindexResult>
+  reindexDoc(id: string): Promise<{ id: string; filename: string }>
   toc(): Promise<TocResult>
   log(limit: number): Promise<any[]>
   logAdd(op: string, doc?: string, details?: string): Promise<void>
   schema(): Promise<string | object | null>
   schemaUpdate(): Promise<void>
+  info(): Promise<WikiInfo>
+  resolve(input: string): Promise<ResolveResult>
 }
 
 export interface LocalServices {
@@ -59,6 +96,7 @@ export interface LocalServices {
   workflow: DocWorkflowService
   schema: SchemaService
   activityLog: ActivityLogService
+  parser: ParserService
 }
 
 export class LocalWikiOps implements WikiOps {
@@ -69,22 +107,26 @@ export class LocalWikiOps implements WikiOps {
   }
 
   async docExists(filename: string): Promise<boolean> {
-    return this.svc.storage.docExists(this.kb, filename)
+    return this.svc.storage.docExists(this.kb, toFilename(normalizeDocId(filename)))
   }
 
   async readRaw(filename: string): Promise<string> {
-    return this.svc.storage.readRaw(this.kb, filename)
+    return this.svc.storage.readRaw(this.kb, toFilename(normalizeDocId(filename)))
   }
 
   async readDoc(filename: string): Promise<ParsedDoc> {
-    return this.svc.storage.readDoc(this.kb, filename)
+    return this.svc.storage.readDoc(this.kb, toFilename(normalizeDocId(filename)))
   }
 
-  async addDoc(title: string, category: string, tags: string[], content: string): Promise<{ id: string; filename: string }> {
+  async readSlice(filename: string, fromLine: number, toLine: number): Promise<ReadSliceResult> {
+    return this.svc.storage.readSlice(this.kb, toFilename(normalizeDocId(filename)), fromLine, toLine)
+  }
+
+  async addDoc(title: string, category: string, tags: string[], content: string, opts?: { dryRun?: boolean }): Promise<WriteResult> {
     const id = slugify(title)
     const filename = `${id}.md`
 
-    if (this.svc.storage.docExists(this.kb, filename)) {
+    if (!opts?.dryRun && this.svc.storage.docExists(this.kb, filename)) {
       throw new Error(`Document "${filename}" already exists in wiki "${this.kb}".`)
     }
 
@@ -97,18 +139,23 @@ export class LocalWikiOps implements WikiOps {
       updated: today(),
     }
 
+    const raw = this.svc.parser.serialize(frontmatter, content)
+    const issues = this.svc.workflow.lintRawDoc(raw, filename)
+
+    if (opts?.dryRun) return { id, filename, issues }
+
     this.svc.storage.writeDoc(this.kb, filename, frontmatter, content)
-    await this.svc.workflow.indexAndEmbed(this.kb, id, frontmatter, content, filename)
+    await this.svc.workflow.indexAndEmbed(this.kb, id, frontmatter)
     this.svc.activityLog.log(this.kb, 'add', id, `category=${category}`)
 
-    return { id, filename }
+    return { id, filename, issues }
   }
 
-  async updateDoc(id: string, patch: UpdatePatch): Promise<{ id: string; filename: string }> {
-    const filename = toFilename(id)
+  async updateDoc(rawId: string, patch: UpdatePatch, opts?: { dryRun?: boolean }): Promise<WriteResult> {
+    const { id, filename } = canonicalize(rawId)
 
     if (!this.svc.storage.docExists(this.kb, filename)) {
-      throw new Error(`Document "${filename}" not found in wiki "${this.kb}".`)
+      throw new Error(`Document "${filename}" not found in wiki "${this.kb}". Try \`kb resolve ${rawId}\` or \`kb list\`.`)
     }
 
     const doc = this.svc.storage.readDoc(this.kb, filename)
@@ -122,30 +169,32 @@ export class LocalWikiOps implements WikiOps {
     }
 
     let body = doc.body
-    if (patch.content !== undefined) {
-      body = patch.content
-    } else if (patch.append !== undefined) {
-      body = body + patch.append
-    }
+    if (patch.content !== undefined) body = patch.content
+    else if (patch.append !== undefined) body = body + patch.append
+
+    const raw = this.svc.parser.serialize(frontmatter, body)
+    const issues = this.svc.workflow.lintRawDoc(raw, filename)
+
+    if (opts?.dryRun) return { id, filename, issues }
 
     this.svc.storage.writeDoc(this.kb, filename, frontmatter, body)
-    await this.svc.workflow.indexAndEmbed(this.kb, id, frontmatter, body, filename)
+    await this.svc.workflow.indexAndEmbed(this.kb, id, frontmatter)
     this.svc.activityLog.log(this.kb, 'update', id)
 
-    return { id, filename }
+    return { id, filename, issues }
   }
 
-  async deleteDoc(id: string): Promise<{ deleted: string; warnings: string[] }> {
-    const filename = toFilename(id)
+  async deleteDoc(rawId: string): Promise<{ deleted: string; warnings: string[] }> {
+    const { id, filename } = canonicalize(rawId)
 
     if (!this.svc.storage.docExists(this.kb, filename)) {
-      throw new Error(`Document "${filename}" not found in wiki "${this.kb}".`)
+      throw new Error(`Document "${filename}" not found in wiki "${this.kb}". Try \`kb resolve ${rawId}\` or \`kb list\`.`)
     }
 
     const backlinks = await this.svc.index.getLinksTo(this.kb, id)
     const warnings: string[] = []
     if (backlinks.length > 0) {
-      const sources = backlinks.map((l) => `${l.fromId}.md`)
+      const sources = backlinks.map((l) => toFilename(l.fromId))
       warnings.push(
         `${backlinks.length} document(s) have broken links to ${filename}: ${sources.join(', ')}`,
       )
@@ -158,9 +207,9 @@ export class LocalWikiOps implements WikiOps {
     return { deleted: filename, warnings }
   }
 
-  async rename(oldId: string, newId: string): Promise<{ oldId: string; newId: string; linksUpdated: number }> {
-    const oldFilename = `${oldId}.md`
-    const newFilename = `${newId}.md`
+  async rename(rawOldId: string, rawNewId: string): Promise<{ oldId: string; newId: string; linksUpdated: number }> {
+    const { id: oldId, filename: oldFilename } = canonicalize(rawOldId)
+    const { id: newId, filename: newFilename } = canonicalize(rawNewId)
 
     if (!this.svc.storage.docExists(this.kb, oldFilename)) {
       throw new Error(`Document "${oldFilename}" not found in wiki "${this.kb}".`)
@@ -191,10 +240,10 @@ export class LocalWikiOps implements WikiOps {
     return [...new Set(docs.map((d) => d.category).filter(Boolean))].sort()
   }
 
-  async related(id: string, limit: number): Promise<SearchResult[]> {
-    const filename = toFilename(id)
+  async related(rawId: string, limit: number): Promise<RelatedResult[]> {
+    const { id, filename } = canonicalize(rawId)
     const scored = await this.svc.workflow.findRelated(this.kb, id, filename, limit)
-    return this.svc.search.buildResults(this.kb, scored)
+    return this.svc.search.buildRelatedResults(this.kb, scored)
   }
 
   async lint(): Promise<LintIssue[]> {
@@ -207,8 +256,19 @@ export class LocalWikiOps implements WikiOps {
     return { fixed }
   }
 
-  async reindex(): Promise<ReindexResult> {
-    return this.svc.workflow.reindex(this.kb)
+  async reindex(onProgress?: (current: number, total: number) => void): Promise<ReindexResult> {
+    return this.svc.workflow.reindex(this.kb, onProgress)
+  }
+
+  async reindexDoc(rawId: string): Promise<{ id: string; filename: string }> {
+    const { id, filename } = canonicalize(rawId)
+    if (!this.svc.storage.docExists(this.kb, filename)) {
+      throw new Error(`Document "${filename}" not found in wiki "${this.kb}". Try \`kb resolve ${rawId}\` or \`kb list\`.`)
+    }
+    const doc = this.svc.storage.readDoc(this.kb, filename)
+    await this.svc.workflow.indexAndEmbed(this.kb, id, doc.frontmatter)
+    this.svc.activityLog.log(this.kb, 'reindex', id)
+    return { id, filename }
   }
 
   async toc(): Promise<TocResult> {
@@ -237,6 +297,51 @@ export class LocalWikiOps implements WikiOps {
   async schemaUpdate(): Promise<void> {
     await this.svc.schema.update(this.kb)
   }
+
+  async info(): Promise<WikiInfo> {
+    const docsDir = this.svc.storage.getDocsDir(this.kb)
+    if (!fs.existsSync(docsDir)) {
+      return { name: this.kb, docCount: 0, sizeBytes: 0, lastUpdated: null }
+    }
+    const files = fs.readdirSync(docsDir).filter((f) => f.endsWith('.md'))
+    let sizeBytes = 0
+    let lastMs = 0
+    for (const f of files) {
+      const stat = fs.statSync(path.join(docsDir, f))
+      sizeBytes += stat.size
+      if (stat.mtimeMs > lastMs) lastMs = stat.mtimeMs
+    }
+    return {
+      name: this.kb,
+      docCount: files.length,
+      sizeBytes,
+      lastUpdated: lastMs ? new Date(lastMs).toISOString() : null,
+    }
+  }
+
+  async resolve(input: string): Promise<ResolveResult> {
+    const { id, filename } = canonicalize(input)
+    const exists = id !== '' && this.svc.storage.docExists(this.kb, filename)
+    let title: string | undefined
+    let category: string | undefined
+    if (exists) {
+      try {
+        const doc = this.svc.storage.readDoc(this.kb, filename)
+        title = doc.frontmatter.title
+        category = doc.frontmatter.category
+      } catch {}
+    }
+    let suggestions: string[] = []
+    if (!exists && id !== '') {
+      const all = await this.svc.index.listDocs(this.kb)
+      const lower = id.toLowerCase()
+      suggestions = all
+        .map((d) => d.id)
+        .filter((other) => other.toLowerCase().includes(lower) || lower.includes(other.toLowerCase()))
+        .slice(0, 5)
+    }
+    return { input, id, filename, exists, title, category, suggestions }
+  }
 }
 
 export class RemoteWikiOps implements WikiOps {
@@ -252,16 +357,16 @@ export class RemoteWikiOps implements WikiOps {
   }
 
   async docExists(filename: string): Promise<boolean> {
-    const data = await this.client.read(this.url, this.wiki, filename, undefined, this.secret)
+    const data = await this.client.read(this.url, this.wiki, normalizeDocId(filename), undefined, this.secret)
     return !data.error
   }
 
   async readRaw(filename: string): Promise<string> {
-    return this.client.read(this.url, this.wiki, filename, { format: 'raw' }, this.secret)
+    return this.client.read(this.url, this.wiki, normalizeDocId(filename), { format: 'raw' }, this.secret)
   }
 
   async readDoc(filename: string): Promise<ParsedDoc> {
-    const data = await this.client.read(this.url, this.wiki, filename, { format: 'json' }, this.secret)
+    const data = await this.client.read(this.url, this.wiki, normalizeDocId(filename), { format: 'json' }, this.secret)
     if (data.error) throw new Error(data.error)
     return {
       frontmatter: data.meta,
@@ -270,20 +375,24 @@ export class RemoteWikiOps implements WikiOps {
     }
   }
 
-  async addDoc(title: string, category: string, tags: string[], content: string): Promise<{ id: string; filename: string }> {
-    return this.client.addDoc(this.url, this.wiki, { title, category, tags, content }, this.secret)
+  async readSlice(filename: string, fromLine: number, toLine: number): Promise<ReadSliceResult> {
+    return this.client.readSlice(this.url, this.wiki, normalizeDocId(filename), fromLine, toLine, this.secret)
   }
 
-  async updateDoc(id: string, patch: UpdatePatch): Promise<{ id: string; filename: string }> {
-    return this.client.updateDoc(this.url, this.wiki, id, patch, this.secret)
+  async addDoc(title: string, category: string, tags: string[], content: string, opts?: { dryRun?: boolean }): Promise<WriteResult> {
+    return this.client.addDoc(this.url, this.wiki, { title, category, tags, content, dryRun: opts?.dryRun }, this.secret) as Promise<WriteResult>
+  }
+
+  async updateDoc(id: string, patch: UpdatePatch, opts?: { dryRun?: boolean }): Promise<WriteResult> {
+    return this.client.updateDoc(this.url, this.wiki, normalizeDocId(id), { ...patch, dryRun: opts?.dryRun }, this.secret) as Promise<WriteResult>
   }
 
   async deleteDoc(id: string): Promise<{ deleted: string; warnings: string[] }> {
-    return this.client.deleteDoc(this.url, this.wiki, id, this.secret)
+    return this.client.deleteDoc(this.url, this.wiki, normalizeDocId(id), this.secret)
   }
 
   async rename(oldId: string, newId: string): Promise<{ oldId: string; newId: string; linksUpdated: number }> {
-    return this.client.rename(this.url, this.wiki, oldId, newId, this.secret)
+    return this.client.rename(this.url, this.wiki, normalizeDocId(oldId), normalizeDocId(newId), this.secret)
   }
 
   async listDocs(filters?: { category?: string; tag?: string }): Promise<DocEntry[]> {
@@ -294,8 +403,8 @@ export class RemoteWikiOps implements WikiOps {
     return this.client.categories(this.url, this.wiki, this.secret)
   }
 
-  async related(id: string, limit: number): Promise<SearchResult[]> {
-    return this.client.related(this.url, this.wiki, id, limit, this.secret)
+  async related(id: string, limit: number): Promise<RelatedResult[]> {
+    return this.client.related(this.url, this.wiki, normalizeDocId(id), limit, this.secret)
   }
 
   async lint(): Promise<LintIssue[]> {
@@ -308,6 +417,10 @@ export class RemoteWikiOps implements WikiOps {
 
   async reindex(): Promise<ReindexResult> {
     return this.client.reindex(this.url, this.wiki, this.secret)
+  }
+
+  async reindexDoc(id: string): Promise<{ id: string; filename: string }> {
+    return this.client.reindexDoc(this.url, this.wiki, normalizeDocId(id), this.secret)
   }
 
   async toc(): Promise<TocResult> {
@@ -328,5 +441,13 @@ export class RemoteWikiOps implements WikiOps {
 
   async schemaUpdate(): Promise<void> {
     await this.client.schemaUpdate(this.url, this.wiki, this.secret)
+  }
+
+  async info(): Promise<WikiInfo> {
+    return this.client.wikiInfo(this.url, this.wiki, this.secret)
+  }
+
+  async resolve(input: string): Promise<ResolveResult> {
+    return this.client.resolve(this.url, this.wiki, input, this.secret) as Promise<ResolveResult>
   }
 }

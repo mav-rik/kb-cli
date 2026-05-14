@@ -7,6 +7,7 @@ import { services } from '../services/container.js'
 export class WikiController {
   private get config() { return services.config }
   private get wikiMgmt() { return services.wikiManagement }
+  private get gateway() { return services.gateway }
 
   private get remoteConfig() { return services.remoteConfig }
 
@@ -36,9 +37,13 @@ export class WikiController {
 
     if (wikis.length > 0) {
       const dataDir = this.config.getDataDir()
+      // Resolve through the same chain commands use: explicit flag → kb.config.json
+      // in cwd → global defaultWiki. wiki list has no --wiki arg, so it surfaces
+      // whichever default would actually be picked up by `kb search`, `kb add`, etc.
+      const effectiveDefault = this.config.resolveWikiName()
       lines.push('Local wikis:')
-      lines.push('Name         | Docs | DB Size  | Docs Size')
-      lines.push('-------------|------|----------|----------')
+      lines.push('  Name         | Docs | DB Size  | Docs Size')
+      lines.push('  -------------|------|----------|----------')
 
       for (const name of wikis) {
         const docsDir = path.join(dataDir, name, 'docs')
@@ -55,7 +60,14 @@ export class WikiController {
         }
 
         const dbSize = fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0
-        lines.push(`${name.padEnd(12)} | ${String(docCount).padStart(4)} | ${formatBytes(dbSize).padStart(8)} | ${formatBytes(docsSize)}`)
+        const marker = name === effectiveDefault ? '* ' : '  '
+        lines.push(`${marker}${name.padEnd(12)} | ${String(docCount).padStart(4)} | ${formatBytes(dbSize).padStart(8)} | ${formatBytes(docsSize)}`)
+      }
+      if (wikis.includes(effectiveDefault)) {
+        const source = this.config.defaultWikiSource() === 'cwd'
+          ? 'kb.config.json in this directory'
+          : 'global config'
+        lines.push(`(* = default — from ${source})`)
       }
     }
 
@@ -104,39 +116,25 @@ export class WikiController {
 
   @Cli('info/:name')
   @Description('Show info about a wiki')
-  info(@Param('name') name: string) {
-    if (!this.wikiMgmt.exists(name)) {
+  async info(@Param('name') name: string): Promise<string> {
+    const ref = this.config.resolveWiki(name)
+    if (ref.type === 'local' && !this.wikiMgmt.exists(ref.name)) {
       return `Error: Wiki "${name}" does not exist.`
     }
-
-    const dataDir = this.config.getDataDir()
-    const docsDir = path.join(dataDir, name, 'docs')
-
-    const files = fs.readdirSync(docsDir)
-    let totalSize = 0
-    let lastModified = new Date(0)
-    let fileCount = 0
-
-    for (const file of files) {
-      const filePath = path.join(docsDir, file)
-      const stat = fs.statSync(filePath)
-      if (stat.isFile()) {
-        fileCount++
-        totalSize += stat.size
-        if (stat.mtime > lastModified) {
-          lastModified = stat.mtime
-        }
-      }
+    const ops = this.gateway.getOps(ref)
+    try {
+      const info = await ops.info()
+      const where = ref.type === 'remote' ? ` (remote: ${ref.remoteKb}/${ref.name})` : ''
+      const lines = [
+        `Wiki: ${name}${where}`,
+        `Documents: ${info.docCount}`,
+        `Total size: ${formatBytes(info.sizeBytes)}`,
+        `Last modified: ${info.lastUpdated ?? 'N/A'}`,
+      ]
+      return lines.join('\n')
+    } catch (err: any) {
+      return `Error: ${err.message}`
     }
-
-    const lines = [
-      `Wiki: ${name}`,
-      `Documents: ${fileCount}`,
-      `Total size: ${formatBytes(totalSize)}`,
-      `Last modified: ${fileCount > 0 ? lastModified.toISOString() : 'N/A'}`,
-    ]
-
-    return lines.join('\n')
   }
 }
 

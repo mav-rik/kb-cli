@@ -4,7 +4,8 @@ import { ParserService } from './parser.service.js'
 import { IndexService } from './index.service.js'
 import { LinkerService } from './linker.service.js'
 import { EmbeddingService } from './embedding.service.js'
-import { FtsService } from './fts.service.js'
+import { ChunkFtsService } from './chunk-fts.service.js'
+import { ChunkerService } from './chunker.service.js'
 import { SearchService } from './search.service.js'
 import { DocWorkflowService } from './doc-workflow.service.js'
 import { WikiManagementService } from './wiki-management.service.js'
@@ -22,7 +23,8 @@ class ServiceContainer {
   readonly index: IndexService
   readonly linker: LinkerService
   readonly embedding: EmbeddingService
-  readonly fts: FtsService
+  readonly chunkFts: ChunkFtsService
+  readonly chunker: ChunkerService
   readonly search: SearchService
   readonly docWorkflow: DocWorkflowService
   readonly wikiManagement: WikiManagementService
@@ -35,12 +37,13 @@ class ServiceContainer {
 
   constructor() {
     this.index = new IndexService(this.config)
-    this.fts = new FtsService(this.config)
+    this.chunkFts = new ChunkFtsService(this.config)
+    this.chunker = new ChunkerService()
     this.embedding = new EmbeddingService(this.config)
     this.storage = new StorageService(this.config, this.parser)
     this.linker = new LinkerService(this.storage, this.parser, this.index)
-    this.search = new SearchService(this.embedding, this.fts, this.index, this.storage)
-    this.docWorkflow = new DocWorkflowService(this.parser, this.index, this.linker, this.embedding, this.fts, this.storage)
+    this.search = new SearchService(this.embedding, this.chunkFts, this.index, this.storage)
+    this.docWorkflow = new DocWorkflowService(this.parser, this.index, this.linker, this.embedding, this.storage, this.chunker, this.chunkFts)
     this.wikiManagement = new WikiManagementService(this.config)
     this.activityLog = new ActivityLogService(this.config)
     this.schema = new SchemaService(this.config, this.index, this.storage)
@@ -54,17 +57,16 @@ class ServiceContainer {
         workflow: this.docWorkflow,
         schema: this.schema,
         activityLog: this.activityLog,
+        parser: this.parser,
       },
       this.localServer,
     )
     this.migration = new MigrationService(
       this.config,
       this.index,
-      this.embedding,
-      this.fts,
       this.storage,
-      this.parser,
       this.wikiManagement,
+      this.docWorkflow,
     )
   }
 }

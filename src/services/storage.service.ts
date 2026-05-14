@@ -54,6 +54,20 @@ export class StorageService {
   }
 
   /**
+   * Read a 1-indexed inclusive line range from the raw file. Canonical clamper:
+   * `fromLine`/`toLine` may be unclamped (callers may pass Infinity); the
+   * returned `fromLine`/`toLine` reflect the actual slice taken.
+   */
+  readSlice(kb: string, filename: string, fromLine: number, toLine: number): { filename: string; fromLine: number; toLine: number; totalLines: number; content: string } {
+    const rawLines = this.readRaw(kb, filename).split(/\r?\n/)
+    const totalLines = rawLines.length
+    const from = Math.max(1, fromLine)
+    const to = Math.min(totalLines, toLine)
+    const content = from > to ? '' : rawLines.slice(from - 1, to).join('\n')
+    return { filename, fromLine: from, toLine: to, totalLines, content }
+  }
+
+  /**
    * Write a document with frontmatter and body to disk.
    * Creates the docs directory if it does not exist.
    */

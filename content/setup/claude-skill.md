@@ -39,9 +39,13 @@ kb read <filename> [--lines, -l 1-80] [--meta, -m] [--links] [--follow, -f ./oth
 
 # Writing
 kb add --title, -t "<title>" --category, -c <cat> [--tags "<t1,t2>"] \
-       (--content "..." | --body "..." | --file <path> | --stdin)
+       (--content "..." | --body "..." | --file <path> | --stdin) \
+       [--dry-run] [--format json]
+    # --dry-run: lint only, no write — preview retrievability issues first.
+    # Real run also returns lint warnings in the response (always-on).
 kb update <id> [--title, -t "..."] [--category, -c <c>] [--tags "..."] \
-               (--content "<replacement>" | --append "<more>")
+               (--content "<replacement>" | --append "<more>") \
+               [--dry-run] [--format json]
 kb delete <id>
 kb rename <old> <new>                       # auto-updates links
 
@@ -49,7 +53,9 @@ kb rename <old> <new>                       # auto-updates links
 kb list [--category, -c <c>] [--tag <t>] [--format json]
 kb categories
 kb toc
-kb lint [--fix]
+kb lint [--fix] [--format json]
+    # Reports broken/orphan/missing/drift + retrievability (chunk-merge,
+    # long-paragraph, doc-too-short, doc-too-long). See `kb skill lint`.
 kb schema [update]
 kb reindex
 
@@ -71,3 +77,7 @@ Key rules:
 4. Discuss key takeaways with user before ingesting
 5. Resolve contradictions using recency → authority → specificity
 6. Log session summaries after ingest/lint with `kb log add`
+7. Write for chunked retrieval — docs are split by H2/H3 heading and each chunk is searched independently. Target ~200-1500 words per doc, ≥80 words per section, paragraphs under 1500 chars. Sections under ~160 chars or >50% link syntax auto-merge into the previous chunk. Three frontmatter opt-outs (use deliberately):
+   - `important_sections: [TL;DR, Status]` — prevent merging of named sections
+   - `suppress_merge_warn: [See Also, Contacts]` — let the merge happen but silence the lint warning for those sections
+   - `suppress_lint: [doc-too-short, doc-too-long, long-paragraph, chunk-merge]` — silence doc-level soft warnings (justify the choice)

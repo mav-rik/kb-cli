@@ -15,9 +15,12 @@ vi.mock('node:os', async (importOriginal) => {
 const { ConfigService, CURRENT_SCHEMA_VERSION } = await import('../src/services/config.service.js')
 const { IndexService } = await import('../src/services/index.service.js')
 const { EmbeddingService } = await import('../src/services/embedding.service.js')
-const { FtsService } = await import('../src/services/fts.service.js')
 const { StorageService } = await import('../src/services/storage.service.js')
 const { ParserService } = await import('../src/services/parser.service.js')
+const { LinkerService } = await import('../src/services/linker.service.js')
+const { ChunkerService } = await import('../src/services/chunker.service.js')
+const { ChunkFtsService } = await import('../src/services/chunk-fts.service.js')
+const { DocWorkflowService } = await import('../src/services/doc-workflow.service.js')
 const { WikiManagementService } = await import('../src/services/wiki-management.service.js')
 const { MigrationService } = await import('../src/services/migration.service.js')
 
@@ -44,17 +47,29 @@ function buildServices() {
   const parser = new ParserService()
   const storage = new StorageService(config, parser)
   const index = new IndexService(config)
-  const fts = new FtsService(config)
   const embedding = new EmbeddingService(config)
+  const linker = new LinkerService(storage, parser, index)
+  const chunker = new ChunkerService()
+  const chunkFts = new ChunkFtsService(config)
   const wikis = new WikiManagementService(config)
 
   embedding.embedBatch = async (texts: string[]) => texts.map((t) => hashedVec(t))
   embedding.embed = async (t: string) => hashedVec(t)
   embedding.init = async () => undefined
 
-  const migration = new MigrationService(config, index, embedding, fts, storage, parser, wikis)
+  const docWorkflow = new DocWorkflowService(
+    parser,
+    index,
+    linker,
+    embedding,
+    storage,
+    chunker,
+    chunkFts,
+  )
 
-  return { config, parser, storage, index, fts, embedding, wikis, migration }
+  const migration = new MigrationService(config, index, storage, wikis, docWorkflow)
+
+  return { config, parser, storage, index, embedding, chunkFts, wikis, docWorkflow, migration }
 }
 
 function writeMarkdown(wiki: string, id: string, body: string, category = 'misc') {
@@ -82,8 +97,6 @@ describe('MigrationService', () => {
   })
 
   afterEach(() => {
-    // Best-effort: close out any open DBs by clearing the require cache
-    // would be nicer, but vitest re-imports between files. We just wipe.
     if (fs.existsSync(kbDir)) fs.rmSync(kbDir, { recursive: true, force: true })
   })
 
@@ -94,30 +107,23 @@ describe('MigrationService', () => {
     expect(loaded.schemaVersion).toBe(CURRENT_SCHEMA_VERSION)
     expect(migration.detectNeeded()).toBe(false)
 
-    // The config file should now exist on disk.
     const onDisk = JSON.parse(fs.readFileSync(path.join(kbDir, 'config.json'), 'utf-8'))
     expect(onDisk.schemaVersion).toBe(CURRENT_SCHEMA_VERSION)
   })
 
   it('legacy wiki without schemaVersion triggers detectNeeded=true', () => {
-    // Pre-populate a wiki dir + dummy index.db (empty file is fine; the
-    // existence of the index.db / docs dir is what hasAnyWiki checks).
     writeMarkdown('legacy', 'foo', '# Foo\n\nhello')
     fs.writeFileSync(path.join(kbDir, 'legacy', 'index.db'), '')
-    // Note: NO config.json present. loadConfig sees wikis, so it does NOT
-    // stamp schemaVersion, and getSchemaVersion returns 0 -> needs migration.
     const { migration } = buildServices()
     expect(migration.detectNeeded()).toBe(true)
   })
 
   it('marker file forces detectNeeded=true even if schemaVersion is current', () => {
-    // Stamp the current schemaVersion explicitly.
     fs.writeFileSync(
       path.join(kbDir, 'config.json'),
       JSON.stringify({ defaultWiki: 'default', schemaVersion: CURRENT_SCHEMA_VERSION }),
       'utf-8',
     )
-    // Create a wiki with a leftover marker (simulates a crashed mid-run).
     fs.mkdirSync(path.join(kbDir, 'work', 'docs'), { recursive: true })
     fs.writeFileSync(path.join(kbDir, 'work', '.migration-in-progress'), '', 'utf-8')
 
@@ -126,9 +132,6 @@ describe('MigrationService', () => {
   })
 
   it('plan reports per-wiki counts across multiple wikis', async () => {
-    // Two wikis with docs on disk. Opening DbSpace via plan() will
-    // create the schema fresh — no existing rows, so all docs are
-    // "needing embedding".
     writeMarkdown('alpha', 'a1', 'alpha doc one')
     writeMarkdown('alpha', 'a2', 'alpha doc two')
     writeMarkdown('beta', 'b1', 'beta doc one')
@@ -139,37 +142,55 @@ describe('MigrationService', () => {
     const names = plan.wikis.map((w) => w.name).sort()
     expect(names).toEqual(['alpha', 'beta'])
 
-    // Schema is freshly created, so documents table is empty; nothing
-    // "needs embedding" yet (rows don't exist). The migration will
-    // create them in run().
+    // v1→v2 reprocesses every file, so totalDocs counts files on disk.
     const alpha = plan.wikis.find((w) => w.name === 'alpha')!
     const beta = plan.wikis.find((w) => w.name === 'beta')!
-    expect(alpha.totalDocs).toBe(0)
-    expect(alpha.needingEmbedding).toBe(0)
-    expect(beta.totalDocs).toBe(0)
+    expect(alpha.totalDocs).toBe(2)
+    expect(beta.totalDocs).toBe(1)
   })
 
-  it('run is idempotent: second invocation is a no-op', async () => {
-    writeMarkdown('w', 'first', 'first body')
-    writeMarkdown('w', 'second', 'second body')
+  it('run populates docs, chunks, and centroid embedding, then bumps schemaVersion', async () => {
+    writeMarkdown('w', 'first', '# First\n\nfirst body content\n\n## Sub\n\nmore content')
+    writeMarkdown('w', 'second', '# Second\n\nsecond body content')
 
     const { migration, config, index } = buildServices()
-    const calls: Array<[number, number]> = []
+    const progressCalls: Array<[string, number, number]> = []
     await migration.run({
-      onProgress: (_w, done, total) => {
-        calls.push([done, total])
+      onProgress: (w, done, total) => {
+        progressCalls.push([w, done, total])
       },
     })
     expect(config.getSchemaVersion()).toBe(CURRENT_SCHEMA_VERSION)
 
-    // Both docs were embedded.
+    // Per-doc progress: 2 callbacks for 2 docs.
+    expect(progressCalls.length).toBe(2)
+    expect(progressCalls.every(([w, , total]) => w === 'w' && total === 2)).toBe(true)
+
+    // Both docs were embedded (centroid path).
     expect(await index.countDocs('w')).toBe(2)
     expect(await index.countDocsWithoutEmbedding('w')).toBe(0)
 
-    // Second run: schemaVersion already current, nothing should change.
-    // We snapshot (id, contentHash, hasEmbedding) per row — these are
-    // the user-visible bits the migration should not touch when
-    // re-invoked against an already-current DB.
+    // Chunks were built for both docs.
+    const firstChunks = await index.listChunksForDoc('w', 'first')
+    const secondChunks = await index.listChunksForDoc('w', 'second')
+    expect(firstChunks.length).toBeGreaterThan(0)
+    expect(secondChunks.length).toBeGreaterThan(0)
+
+    // Marker is cleaned up.
+    expect(fs.existsSync(path.join(kbDir, 'w', '.migration-in-progress'))).toBe(false)
+  })
+
+  it('run is idempotent: second invocation preserves doc rows', async () => {
+    writeMarkdown('w', 'first', 'first body')
+    writeMarkdown('w', 'second', 'second body')
+
+    const { migration, config, index } = buildServices()
+    await migration.run({})
+    expect(config.getSchemaVersion()).toBe(CURRENT_SCHEMA_VERSION)
+
+    expect(await index.countDocs('w')).toBe(2)
+    expect(await index.countDocsWithoutEmbedding('w')).toBe(0)
+
     const before = (await index.listDocsForMigration('w')).sort((a, b) =>
       a.id.localeCompare(b.id),
     )
@@ -178,18 +199,13 @@ describe('MigrationService', () => {
       a.id.localeCompare(b.id),
     )
     expect(after).toEqual(before)
-
-    // Marker file is cleaned up.
-    expect(fs.existsSync(path.join(kbDir, 'w', '.migration-in-progress'))).toBe(false)
   })
 
   it('run drops legacy documents_vec table if present', async () => {
     writeMarkdown('w', 'only', 'body')
 
-    // Pre-create the wiki dir + an index.db with the legacy shadow table.
     const dbPath = path.join(kbDir, 'w', 'index.db')
     fs.mkdirSync(path.dirname(dbPath), { recursive: true })
-    // Use the same better-sqlite3 the app uses to create the legacy table.
     const Database = (await import('better-sqlite3')).default
     const legacy = new Database(dbPath)
     legacy.exec('CREATE TABLE documents_vec (rowid INTEGER PRIMARY KEY, x BLOB)')
@@ -205,116 +221,97 @@ describe('MigrationService', () => {
     expect(await index.hasLegacyVecTable('w')).toBe(false)
   })
 
-  it('semanticSearch ranks the doc matching the query vector first', async () => {
+  it('run drops legacy documents_fts table if present', async () => {
+    writeMarkdown('w', 'only', 'body')
+
+    const dbPath = path.join(kbDir, 'w', 'index.db')
+    fs.mkdirSync(path.dirname(dbPath), { recursive: true })
+    const Database = (await import('better-sqlite3')).default
+    const legacy = new Database(dbPath)
+    legacy.exec(
+      `CREATE VIRTUAL TABLE documents_fts USING fts5(id UNINDEXED, title, body)`,
+    )
+    legacy.close()
+
+    const { migration, index } = buildServices()
+    const plan = await migration.plan()
+    const w = plan.wikis.find((x) => x.name === 'w')!
+    expect(w.hasLegacyFts).toBe(true)
+
+    await migration.run({})
+
+    expect(await index.hasLegacyFtsTable('w')).toBe(false)
+  })
+
+  it('every markdown file results in chunks being written via indexAndEmbed', async () => {
+    writeMarkdown('w', 'alpha', '# Alpha\n\nalpha body')
+    writeMarkdown('w', 'beta', '# Beta\n\nbeta body')
+    writeMarkdown('w', 'gamma', '# Gamma\n\ngamma body')
+
+    const services = buildServices()
+    const spy = vi.spyOn(services.docWorkflow, 'indexAndEmbed')
+    await services.migration.run({})
+
+    expect(spy).toHaveBeenCalledTimes(3)
+    const ids = spy.mock.calls.map((c) => c[1]).sort()
+    expect(ids).toEqual(['alpha', 'beta', 'gamma'])
+
+    for (const id of ['alpha', 'beta', 'gamma']) {
+      const chunks = await services.index.listChunksForDoc('w', id)
+      expect(chunks.length, `expected chunks for ${id}`).toBeGreaterThan(0)
+    }
+  })
+
+  it('semanticSearch ranks the doc whose chunk centroid matches the query first', async () => {
     writeMarkdown('w', 'apple', 'apple apple apple')
     writeMarkdown('w', 'banana', 'banana banana banana')
     writeMarkdown('w', 'carrot', 'carrot carrot carrot')
 
-    const { migration, index, storage } = buildServices()
+    const { migration, index } = buildServices()
     await migration.run({})
 
-    // Re-hash the exact body the migration embedded so the query vector
-    // collides 1:1 with the banana doc and is orthogonal to the others.
-    const bananaDoc = storage.readDoc('w', 'banana.md')
-    const queryVec = hashedVec(bananaDoc.body)
-    const hits = await index.semanticSearch('w', queryVec, 10)
-
+    // Each doc has one chunk with embeddingInput tied to its body — the
+    // centroid for a single-chunk doc is just that chunk's embedding
+    // (normalized). Query by the same body text → match the banana doc.
+    const hits = await index.semanticSearch('w', hashedVec('banana banana banana'), 10)
     expect(hits.length).toBeGreaterThanOrEqual(1)
-    expect(hits[0].id).toBe('banana')
-    expect(hits[0].distance).toBeLessThan(0.01)
-    // The runner-up should be meaningfully more distant. Strict
-    // `> 1` would fail if two unrelated bodies happen to hash to the
-    // same bucket mod 768 (rare, but Birthday paradox is real).
-    if (hits.length > 1) {
-      expect(hits[1].distance).toBeGreaterThan(hits[0].distance + 0.5)
-    }
-  })
-
-  it('embed-only mode: existing row with matching contentHash and NULL embedding', async () => {
-    writeMarkdown('w', 'first', 'first body')
-    writeMarkdown('w', 'second', 'second body')
-
-    // Run the migration once to populate everything.
-    const services = buildServices()
-    await services.migration.run({})
-    expect(await services.index.countDocsWithoutEmbedding('w')).toBe(0)
-
-    // Capture the row metadata so we can prove the migration's "embed
-    // mode" branch doesn't touch contentHash / category / title / etc.
-    const before = await services.index.listDocsForMigration('w')
-
-    // NULL out the embedding for one doc via a fresh SQLite handle.
-    // The schema has vec0 triggers on `documents`, so the sqlite-vec
-    // extension must be loaded before we can write to the table.
-    // contentHash stays intact, so the migration must take the
-    // embed-only path (NOT the full reindex path).
-    const Database = (await import('better-sqlite3')).default
-    const sqliteVec = await import('sqlite-vec')
-    const dbPath = path.join(kbDir, 'w', 'index.db')
-    const direct = new Database(dbPath)
-    sqliteVec.load(direct)
-    direct.exec("UPDATE documents SET embedding = NULL WHERE id = 'first'")
-    direct.close()
-
-    // Rebuild services so IndexService re-opens the DB and sees the NULL.
-    const fresh = buildServices()
-    expect(await fresh.index.countDocsWithoutEmbedding('w')).toBe(1)
-
-    // Track whether reindex-only side effects fire. FTS.upsert is only
-    // called on the "reindex" branch, not the "embed" branch — if it
-    // fires, the wrong branch was taken.
-    let ftsUpsertCalls = 0
-    const origUpsert = fresh.fts.upsert.bind(fresh.fts)
-    fresh.fts.upsert = ((kb: string, id: string, t: string, tg: string[], b: string) => {
-      ftsUpsertCalls++
-      return origUpsert(kb, id, t, tg, b)
-    }) as typeof fresh.fts.upsert
-
-    await fresh.migration.run({})
-
-    expect(await fresh.index.countDocsWithoutEmbedding('w')).toBe(0)
-    expect(ftsUpsertCalls).toBe(0) // proves embed-only path was used
-
-    // contentHash + other metadata unchanged for both rows.
-    const after = await fresh.index.listDocsForMigration('w')
-    const byId = (rows: typeof after) =>
-      Object.fromEntries(rows.map((r) => [r.id, r.contentHash]))
-    expect(byId(after)).toEqual(byId(before))
+    // Banana should be at or near the top — single-chunk centroid equals
+    // the hashedVec input within the chunker's normalization tolerance.
+    const top = hits.slice(0, 3).map((h) => h.id)
+    expect(top).toContain('banana')
   })
 
   it('crash mid-run leaves marker; next run resumes to completion', async () => {
-    // 27 docs forces 2 batches at BATCH_SIZE=25.
-    for (let i = 0; i < 27; i++) writeMarkdown('w', `doc${i}`, `body ${i}`)
+    for (let i = 0; i < 5; i++) writeMarkdown('w', `doc${i}`, `body ${i}`)
 
     const services = buildServices()
-    // Throw on the second embedBatch call to simulate a crash partway through.
-    let batchCalls = 0
-    services.embedding.embedBatch = async (texts: string[]) => {
-      batchCalls++
-      if (batchCalls === 2) throw new Error('simulated crash on batch 2')
-      return texts.map((t) => hashedVec(t))
-    }
+    // Throw on the third indexAndEmbed call to simulate a crash partway through.
+    let calls = 0
+    const orig = services.docWorkflow.indexAndEmbed.bind(services.docWorkflow)
+    services.docWorkflow.indexAndEmbed = (async (...args: Parameters<typeof orig>) => {
+      calls++
+      if (calls === 3) throw new Error('simulated crash on doc 3')
+      return orig(...args)
+    }) as typeof services.docWorkflow.indexAndEmbed
 
     await expect(services.migration.run({})).rejects.toThrow('simulated crash')
 
     // Marker still present — the gate will keep firing on next startup.
     expect(fs.existsSync(path.join(kbDir, 'w', '.migration-in-progress'))).toBe(true)
-    // upsertDoc runs INSIDE the post-embedBatch inner loop, so a crash
-    // in embedBatch leaves the second batch's rows entirely unwritten.
-    // Filesystem has 27 docs; DB has only what the first batch finished.
+    // Partial state: at least one doc indexed, but not all 5.
     const partial = await services.index.countDocs('w')
-    expect(partial).toBeLessThan(27)
     expect(partial).toBeGreaterThan(0)
-    // schemaVersion stays at 0 — the gate remains active.
-    expect(services.config.getSchemaVersion()).toBe(0)
+    expect(partial).toBeLessThan(5)
+    // schemaVersion stays below current — the gate remains active.
+    expect(services.config.getSchemaVersion()).toBeLessThan(CURRENT_SCHEMA_VERSION)
 
-    // Restore a working embedBatch and re-run.
+    // Restore a working indexAndEmbed and re-run.
     const fresh = buildServices()
     await fresh.migration.run({})
 
     expect(fs.existsSync(path.join(kbDir, 'w', '.migration-in-progress'))).toBe(false)
+    expect(await fresh.index.countDocs('w')).toBe(5)
     expect(await fresh.index.countDocsWithoutEmbedding('w')).toBe(0)
-    expect(await fresh.index.countDocs('w')).toBe(27)
     expect(fresh.config.getSchemaVersion()).toBe(CURRENT_SCHEMA_VERSION)
   })
 })

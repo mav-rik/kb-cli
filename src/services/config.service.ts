@@ -14,8 +14,9 @@ import { RemoteConfigService } from './remote-config.service.js'
  * Version history:
  *   0  — pre-versioned (legacy 384-dim VectorService, no `embedding` column)
  *   1  — atscript-db native vectors + 768-dim Xenova/bge-base-en-v1.5
+ *   2  — heading-based chunks + contentless chunks_fts; Document.embedding is centroid of chunk embeddings; documents_fts dropped
  */
-export const CURRENT_SCHEMA_VERSION = 1
+export const CURRENT_SCHEMA_VERSION = 2
 
 export interface KbCliConfig {
   defaultWiki: string
@@ -156,6 +157,14 @@ export class ConfigService {
   resolveWikiName(explicit?: string): string {
     const ref = this.resolveWiki(explicit)
     return ref.name
+  }
+
+  /**
+   * Source of the resolved default wiki — distinguishes the cwd-pinned case
+   * (kb.config.json in the project tree) from the global default.
+   */
+  defaultWikiSource(): 'cwd' | 'global' {
+    return this.cwdConfig?.wiki ? 'cwd' : 'global'
   }
 
   loadConfig(): KbCliConfig {

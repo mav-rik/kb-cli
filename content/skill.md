@@ -49,21 +49,32 @@ kb read <filename> --lines, -l 1-80         # chunked reading by line range
 kb read <filename> --meta, -m               # frontmatter only, as JSON
 kb read <filename> --links                  # list outgoing links from this doc
 kb read <filename> --follow, -f ./other.md  # follow a link and return the linked doc
+
+kb resolve <arg> [--format json]            # any handle form → canonical id + filename
+    # Returns: id, filename, exists, title?, category?, suggestions[] (fuzzy matches if no exact hit).
+    # Use when `kb read`/`kb update`/etc. say "not found" — the suggestions tell you the real id.
 ```
+
+**Doc handles accept any form.** `read`, `update`, `delete`, `rename`, `related`, `reindex`, `resolve` all accept: bare id (`foo`), filename (`foo.md`), markdown-link form (`./foo.md`), full path, or any case. Internally all forms collapse to the canonical lowercase id — same effect on every call.
 
 ### Writing
 
 ```bash
 kb add --title, -t "<title>" --category, -c <cat> [--tags <t1,t2>] \
        (--content "<body>" | --body "<body>" | --text "<body>" | --file <path> | --stdin) \
-       [--wiki, -w <name>]
+       [--dry-run] [--format json] [--wiki, -w <name>]
     # --content has aliases --body and --text (same thing).
     # Exactly one of --content / --file / --stdin is required.
+    # Always surfaces per-doc lint warnings in the response.
+    # --dry-run: lint only — no write, no index touch. Use to iterate on
+    #   content shape before the doc enters retrieval.
 
 kb update <id> [--title, -t "<new>"] [--category, -c <c>] [--tags "<t1,t2>"] \
                (--content "<full replacement>" | --append "<more>") \
-               [--wiki, -w <name>]
+               [--dry-run] [--format json] [--wiki, -w <name>]
     # --append vs --content: append adds; content replaces.
+    # Always surfaces per-doc lint warnings in the response.
+    # --dry-run: lint only — preview the merged doc without writing.
 
 kb delete <id> [--wiki, -w <name>]
 kb rename <old-id> <new-id> [--wiki, -w <name>]    # auto-updates all links pointing to <old-id>
@@ -80,9 +91,11 @@ kb toc [--wiki, -w <name>]                   # table of contents grouped by cate
 ### Maintenance
 
 ```bash
-kb lint [--fix] [--wiki, -w <name>]
-    # Reports: broken links, orphans, missing frontmatter, drift.
+kb lint [--fix] [--format json] [--wiki, -w <name>]
+    # Reports: broken links, orphans, missing frontmatter, drift,
+    #          long-paragraph, doc-too-short, doc-too-long, chunk-merge (retrievability).
     # --fix: auto-repair broken links + drift (orphans need manual handling).
+    # --format json: machine-parseable output (issues + fixed count).
 
 kb reindex [--wiki, -w <name>]               # drop and rebuild index, FTS, embeddings from MD files
 kb schema [--wiki, -w <name>]                # show wiki schema (structure, conventions, categories)
@@ -155,9 +168,10 @@ kb skill lint                     # detailed lint/maintenance workflow
 1. **Search before adding** — avoid duplicates
 2. **Cross-link aggressively** — use `[text](./other-doc.md)` format
 3. **After every mutation, check related docs** — fix contradictions/outdated info
-4. **One concept per doc, 50-500 lines** — atomic, searchable units
-5. **Categories are free-form** — run `kb categories` to discover existing ones
-6. **Update schema after changes** — `kb schema update`
+4. **One concept per doc, ~200-1500 words** — atomic, searchable units. Below 200 the centroid embedding is noisy; above 1500 split into linked sub-docs.
+5. **Write for chunked retrieval** — docs are split by H2/H3 heading and each chunk is searched independently. Trivial sections (under ~160 chars, or >50% link syntax) auto-merge into the previous chunk. See `kb skill update` for chunking-aware authoring and frontmatter opt-outs (`important_sections`, `suppress_merge_warn`, `suppress_lint`).
+6. **Categories are free-form** — run `kb categories` to discover existing ones
+7. **Update schema after changes** — `kb schema update`
 
 ## Workflows
 

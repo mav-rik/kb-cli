@@ -30,7 +30,7 @@ export class MigrateController {
     // Already current? Print and exit.
     if (
       plan.schemaVersionFrom >= plan.schemaVersionTo &&
-      plan.wikis.every((w) => w.needingEmbedding === 0 && !w.hasLegacyVec && !w.hasMarker)
+      plan.wikis.every((w) => !w.hasLegacyVec && !w.hasLegacyFts && !w.hasMarker)
     ) {
       return summary + '\n\nAlready up to date. Nothing to migrate.'
     }
@@ -78,12 +78,12 @@ function formatPlan(plan: MigrationPlan): string {
   } else {
     lines.push('Wikis:')
     for (const w of plan.wikis) {
-      lines.push(
-        `  ${w.name}: ${w.totalDocs} docs ` +
-          `(${w.needingEmbedding} need embedding, ` +
-          `legacy=${w.hasLegacyVec ? 'yes' : 'no'}, ` +
-          `marker=${w.hasMarker ? 'yes' : 'no'})`,
-      )
+      const flags: string[] = []
+      if (w.hasLegacyVec) flags.push('legacy-vec')
+      if (w.hasLegacyFts) flags.push('legacy-fts')
+      if (w.hasMarker) flags.push('resume-marker')
+      const suffix = flags.length ? ` [${flags.join(', ')}]` : ''
+      lines.push(`  ${w.name}: ${w.totalDocs} docs${suffix}`)
     }
   }
   lines.push('')

@@ -1,5 +1,6 @@
-import { Controller, Cli, CliOption, Description, Optional } from '@moostjs/event-cli'
+import { Controller, Cli, Param, CliOption, Description, Optional } from '@moostjs/event-cli'
 import { services } from '../services/container.js'
+import { toFilename } from '../utils/slug.js'
 import type { LintIssue } from '../services/doc-workflow.service.js'
 
 @Controller()
@@ -11,6 +12,7 @@ export class LintController {
   @Description('Check knowledge base integrity')
   async lint(
     @Description('Auto-fix issues') @CliOption('fix') fix: boolean,
+    @Description('Output format') @CliOption('format') @Optional() format: string,
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
@@ -24,6 +26,10 @@ export class LintController {
       fixedCount = result.fixed
     } else {
       issues = await ops.lint()
+    }
+
+    if (format === 'json') {
+      return JSON.stringify({ issues, fixed: fixedCount }, null, 2)
     }
 
     if (issues.length === 0) {
@@ -60,8 +66,41 @@ export class LintController {
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
-    const result = await ops.reindex()
+    const isTty = process.stderr.isTTY
+    // The remote ops path (CLI auto-routes through a running `kb serve`)
+    // can't stream progress over HTTP — print an up-front message so the
+    // user doesn't think the CLI is stuck during embedding.
+    const routedRemotely = ref.type === 'local' && !!services.localServer.getCached()
+    if (routedRemotely) {
+      process.stderr.write(
+        `Reindexing via running kb serve (PID ${services.localServer.getCached()?.pid ?? '?'}) — this may take a while...\n`,
+      )
+    }
+    const result = await ops.reindex((current, total) => {
+      if (isTty) {
+        process.stderr.write(`\r[${current}/${total}] reindexing...`)
+        if (current === total) process.stderr.write('\n')
+      } else {
+        process.stderr.write(`[${current}/${total}]\n`)
+      }
+    })
     return `Reindexed ${result.count} documents in ${result.elapsed}.`
+  }
+
+  @Cli('reindex/:id')
+  @Description('Rebuild index for a single document')
+  async reindexDoc(
+    @Param('id') id: string,
+    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
+  ): Promise<string> {
+    const ref = this.config.resolveWiki(wiki)
+    const ops = this.gateway.getOps(ref)
+    try {
+      const result = await ops.reindexDoc(id)
+      return `Reindexed: ${result.filename}`
+    } catch (err: any) {
+      return `Error: ${err.message}`
+    }
   }
 
   @Cli('toc')
@@ -88,7 +127,7 @@ export class LintController {
       lines.push(`## ${cat} (${items.length})`)
       const sorted = items.sort((a, b) => a.title.localeCompare(b.title))
       for (const item of sorted) {
-        lines.push(`  - ${item.title} [${item.id}.md]`)
+        lines.push(`  - ${item.title} [${toFilename(item.id)}]`)
       }
       lines.push('')
     }

@@ -2,24 +2,19 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { ConfigService, CURRENT_SCHEMA_VERSION } from './config.service.js'
 import { IndexService } from './index.service.js'
-import { EmbeddingService } from './embedding.service.js'
-import { FtsService } from './fts.service.js'
 import { StorageService } from './storage.service.js'
-import { ParserService } from './parser.service.js'
 import { WikiManagementService } from './wiki-management.service.js'
+import { DocWorkflowService } from './doc-workflow.service.js'
 import { toDocId } from '../utils/slug.js'
-import { contentHash } from '../utils/hash.js'
-import { chunk } from '../utils/chunk.js'
 
 const MARKER_FILE = '.migration-in-progress'
 const LEGACY_MODEL_DIR = 'models--Xenova--all-MiniLM-L6-v2'
-const BATCH_SIZE = 25
 
 export interface MigrationPlanWiki {
   name: string
   totalDocs: number
-  needingEmbedding: number
   hasLegacyVec: boolean
+  hasLegacyFts: boolean
   hasMarker: boolean
 }
 
@@ -46,11 +41,9 @@ export class MigrationService {
   constructor(
     private config: ConfigService,
     private index: IndexService,
-    private embedding: EmbeddingService,
-    private fts: FtsService,
     private storage: StorageService,
-    private parser: ParserService,
     private wikis: WikiManagementService,
+    private docWorkflow: DocWorkflowService,
   ) {}
 
   /**
@@ -83,7 +76,7 @@ export class MigrationService {
   /**
    * Enumerate local wikis and report per-wiki migration state.
    * Opens each wiki's DbSpace which (via syncSchema) adds the
-   * `embedding` column + vec0 shadow + triggers if they are missing.
+   * `embedding` column + vec0 shadow + chunks table if they are missing.
    */
   async plan(opts: { wiki?: string } = {}): Promise<MigrationPlan> {
     const wikiNames = this.scopedWikis(opts.wiki)
@@ -91,15 +84,21 @@ export class MigrationService {
     const wikis: MigrationPlanWiki[] = []
     for (const name of wikiNames) {
       // Opening the space runs syncSchema, which adds the embedding
-      // column + vec0 shadow + triggers if a legacy DB lacks them.
+      // column + vec0 shadow + chunks table if a legacy DB lacks them.
       await this.index.getSpace(name)
 
-      const totalDocs = await this.index.countDocs(name)
-      const needingEmbedding = await this.index.countDocsWithoutEmbedding(name)
+      const totalDocs = this.storage.listFiles(name).length
       const hasLegacyVec = await this.index.hasLegacyVecTable(name)
+      const hasLegacyFts = await this.index.hasLegacyFtsTable(name)
       const hasMarker = fs.existsSync(this.markerPath(name))
 
-      wikis.push({ name, totalDocs, needingEmbedding, hasLegacyVec, hasMarker })
+      wikis.push({
+        name,
+        totalDocs,
+        hasLegacyVec,
+        hasLegacyFts,
+        hasMarker,
+      })
     }
 
     const legacyModelPath = path.join(
@@ -120,7 +119,7 @@ export class MigrationService {
   /**
    * Apply the migration. Resumable: a per-wiki marker file is written
    * before mutating the DB and removed only after the wiki is fully
-   * migrated + its legacy vec table dropped. If any wiki fails,
+   * migrated + its legacy tables dropped. If any wiki fails,
    * schemaVersion is NOT bumped — the CLI gate stays on.
    */
   async run(opts: MigrationRunOptions = {}): Promise<void> {
@@ -159,120 +158,37 @@ export class MigrationService {
     }
   }
 
+  // v1→v2 builds chunks for every doc; no skip-embed because chunks don't exist yet.
   private async migrateOne(kb: string, onProgress?: MigrationProgress): Promise<void> {
-    // 1) Write the resumability marker BEFORE any DB mutation. If we
-    //    crash mid-run, detectNeeded() will see the marker on next start
-    //    and re-gate the CLI.
     this.writeMarker(kb)
 
-    // 2) Open the space — adds embedding column / vec0 shadow / triggers
-    //    if missing (the schema half of the migration).
     await this.index.getSpace(kb)
 
-    // 3) Collect every markdown file and decide what kind of reindex
-    //    each one needs.
     const files = this.storage.listFiles(kb)
-    const total = files.length
+    if (onProgress && files.length === 0) onProgress(kb, 0, 0, 'no docs')
 
-    // Pre-compute existing row state in a single query so we don't N+1
-    // against atscript-db.
-    const existingRows = await this.index.listDocsForMigration(kb)
-    const existing = new Map<string, { contentHash: string; hasEmbedding: boolean }>()
-    for (const r of existingRows) {
-      existing.set(r.id, { contentHash: r.contentHash, hasEmbedding: r.hasEmbedding })
-    }
-
-    // Plan the work: for each file decide if a full reindex is needed
-    // (row missing or stale) or an embedding-only update is sufficient.
-    interface Work {
-      filename: string
-      docId: string
-      body: string
-      title: string
-      category: string
-      tags: string[]
-      hash: string
-      mode: 'reindex' | 'embed'
-    }
-    const todo: Work[] = []
+    let done = 0
     for (const filename of files) {
+      // readDoc throws on missing/corrupt files (readFileSync + frontmatter parse);
+      // skip those rather than aborting the whole wiki. indexAndEmbed errors
+      // stay uncaught so the wiki retains its marker for resume.
       let doc
       try {
         doc = this.storage.readDoc(kb, filename)
       } catch {
-        continue
+        doc = null
       }
-      const docId = toDocId(filename)
-      const hash = contentHash(doc.body)
-      const existingRow = existing.get(docId)
-
-      let mode: 'reindex' | 'embed' | null = null
-      if (!existingRow) {
-        mode = 'reindex'
-      } else if (existingRow.contentHash !== hash) {
-        mode = 'reindex'
-      } else if (!existingRow.hasEmbedding) {
-        mode = 'embed'
+      if (doc) {
+        await this.docWorkflow.indexAndEmbed(kb, toDocId(filename), doc.frontmatter)
       }
-
-      if (mode) {
-        todo.push({
-          filename,
-          docId,
-          body: doc.body,
-          title: doc.frontmatter.title,
-          category: doc.frontmatter.category,
-          tags: doc.frontmatter.tags || [],
-          hash,
-          mode,
-        })
-      }
+      done++
+      if (onProgress) onProgress(kb, done, files.length, doc?.frontmatter.title || filename)
     }
 
-    if (onProgress && todo.length === 0 && total > 0) {
-      onProgress(kb, 0, 0, 'already current')
-    }
-
-    // 4) Process in batches of 25 using embedBatch.
-    let done = 0
-    for (const batch of chunk(todo, BATCH_SIZE)) {
-      const texts = batch.map((w) => w.body || w.title)
-      const vectors = await this.embedding.embedBatch(texts)
-
-      for (let j = 0; j < batch.length; j++) {
-        const w = batch[j]
-        const vec = vectors[j]
-        if (w.mode === 'reindex') {
-          await this.index.upsertDoc(kb, {
-            id: w.docId,
-            title: w.title,
-            category: w.category,
-            tags: w.tags,
-            filePath: w.filename,
-            contentHash: w.hash,
-          })
-          // refresh outbound links + FTS — keeps the index coherent with
-          // the markdown source of truth.
-          const links = this.parser.extractLinks(w.body)
-          await this.index.upsertLinks(
-            kb,
-            w.docId,
-            links.map((l) => ({ toId: toDocId(l.target), linkText: l.text })),
-          )
-          this.fts.upsert(kb, w.docId, w.title, w.tags, w.body)
-        }
-        await this.index.setEmbedding(kb, w.docId, vec)
-        done++
-      }
-
-      const last = batch[batch.length - 1]
-      if (onProgress) onProgress(kb, done, todo.length, last.title || last.filename)
-    }
-
-    // 5) Drop the legacy `documents_vec` shadow table if present.
+    // Drop legacy tables now that the new substrate is populated.
+    await this.index.dropLegacyFtsTable(kb)
     await this.index.dropLegacyVecTable(kb)
 
-    // 6) Marker removed last: the wiki is now fully migrated.
     this.removeMarker(kb)
   }
 

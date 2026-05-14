@@ -3,18 +3,31 @@ import { ParserService } from './parser.service.js'
 import { IndexService } from './index.service.js'
 import { LinkerService } from './linker.service.js'
 import { EmbeddingService } from './embedding.service.js'
-import { FtsService } from './fts.service.js'
+import { ChunkerService } from './chunker.service.js'
+import { ChunkFtsService } from './chunk-fts.service.js'
 import { StorageService } from './storage.service.js'
-import { toDocId } from '../utils/slug.js'
+import { toDocId, toFilename, canonicalize } from '../utils/slug.js'
 import { contentHash } from '../utils/hash.js'
-import { chunk } from '../utils/chunk.js'
 
 export interface LintIssue {
-  type: 'broken' | 'orphan' | 'missing' | 'drift'
+  type:
+    | 'broken'
+    | 'orphan'
+    | 'missing'
+    | 'drift'
+    | 'long-paragraph'
+    | 'doc-too-short'
+    | 'doc-too-long'
+    | 'chunk-merge'
+    | 'corrupt-id'
   severity: 'error' | 'warning'
   file: string
   details: string
 }
+
+const LONG_PARAGRAPH_THRESHOLD = 1500
+const DOC_TOO_SHORT_WORDS = 200
+const DOC_TOO_LONG_WORDS = 1500
 
 export interface ReindexResult {
   count: number
@@ -27,38 +40,136 @@ export class DocWorkflowService {
     private index: IndexService,
     private linker: LinkerService,
     private embedding: EmbeddingService,
-    private fts: FtsService,
     private storage: StorageService,
+    private chunker: ChunkerService,
+    private chunkFts: ChunkFtsService,
   ) {}
 
   /**
-   * Index a document in all stores (index DB, FTS, vector).
+   * Index a document in all stores (index DB, FTS, chunk FTS, vector).
+   *
+   * `rawId` is normalized as defense-in-depth — wiki-ops already normalizes
+   * at its public boundary, but a stray caller passing `foo.md` here would
+   * otherwise plant a duplicate index row. The filename is derived from
+   * the canonical id so the on-disk path always matches the index row.
    */
-  async indexAndEmbed(kb: string, docId: string, frontmatter: DocFrontmatter, body: string, filename: string): Promise<void> {
-    // Read back from disk to get the canonical form (after serialization round-trip)
-    const onDisk = this.storage.readDoc(kb, filename)
-    const canonicalBody = onDisk.body
-    const links = this.parser.extractLinks(canonicalBody)
+  async indexAndEmbed(kb: string, rawId: string, frontmatter: DocFrontmatter): Promise<void> {
+    const { id, filename } = canonicalize(rawId)
+    const rawFileContent = this.storage.readRaw(kb, filename)
+    const parsed = this.parser.parse(rawFileContent)
 
     await this.index.upsertDoc(kb, {
-      id: docId,
+      id,
       title: frontmatter.title,
       category: frontmatter.category,
       tags: frontmatter.tags,
       filePath: filename,
-      contentHash: contentHash(canonicalBody),
+      contentHash: contentHash(parsed.body),
     })
 
     await this.index.upsertLinks(
       kb,
-      docId,
-      links.map((l) => ({ toId: toDocId(l.target), linkText: l.text })),
+      id,
+      parsed.links.map((l) => ({ toId: toDocId(l.target), linkText: l.text })),
     )
 
-    this.fts.upsert(kb, docId, frontmatter.title, frontmatter.tags || [], canonicalBody)
+    const centroid = await this.indexChunks(kb, id, frontmatter, rawFileContent)
+    const docVec = centroid ?? (await this.embedding.embed(frontmatter.title))
+    await this.index.setEmbedding(kb, id, docVec)
+  }
 
-    const vec = await this.embedding.embed(canonicalBody || frontmatter.title)
-    await this.index.setEmbedding(kb, docId, vec)
+  private async indexChunks(
+    kb: string,
+    docId: string,
+    frontmatter: DocFrontmatter,
+    rawFileContent: string,
+  ): Promise<Float32Array | null> {
+    const chunks = this.chunker.chunk({
+      docId,
+      title: frontmatter.title,
+      category: frontmatter.category,
+      tags: frontmatter.tags,
+      rawFileContent,
+      importantSections: frontmatter.importantSections,
+    })
+
+    if (chunks.length === 0) {
+      // chunkFts.deleteByDoc relies on chunks-table-as-bridge, so old chunk
+      // rowids must still be present in chunks when it runs.
+      this.chunkFts.deleteByDoc(kb, docId)
+      await this.index.upsertChunks(kb, docId, [])
+      return null
+    }
+
+    const existing = await this.index.listChunksForDoc(kb, docId)
+    const existingMap = new Map(existing.map((c) => [c.id, c]))
+
+    const embeddings: Float32Array[] = new Array(chunks.length)
+    const toEmbedIdx: number[] = []
+    for (let i = 0; i < chunks.length; i++) {
+      const prev = existingMap.get(chunks[i].id)
+      if (prev && prev.contentHash === chunks[i].contentHash && prev.embedding && prev.embedding.length > 0) {
+        embeddings[i] = new Float32Array(prev.embedding)
+      } else {
+        toEmbedIdx.push(i)
+      }
+    }
+
+    if (toEmbedIdx.length > 0) {
+      const fresh = await this.embedding.embedBatch(toEmbedIdx.map((i) => chunks[i].embeddingInput))
+      for (let k = 0; k < toEmbedIdx.length; k++) {
+        embeddings[toEmbedIdx[k]] = fresh[k]
+      }
+    }
+
+    const rawLines = rawFileContent.split(/\r?\n/)
+    const sliceLines = (from: number, to: number) => rawLines.slice(from - 1, to).join('\n')
+
+    // chunkFts.deleteByDoc relies on chunks-table-as-bridge, so old chunk
+    // rowids must still be present in chunks when it runs — flush FTS first,
+    // then rewrite the chunks rows.
+    this.chunkFts.deleteByDoc(kb, docId)
+    await this.index.upsertChunks(
+      kb,
+      docId,
+      chunks.map((c, i) => ({
+        id: c.id,
+        heading: c.heading,
+        headingPath: c.headingPath,
+        headingLevel: c.headingLevel,
+        fromLine: c.fromLine,
+        toLine: c.toLine,
+        position: c.position,
+        contentHash: c.contentHash,
+        embedding: embeddings[i],
+      })),
+    )
+
+    for (const c of chunks) {
+      this.chunkFts.upsert(kb, {
+        id: c.id,
+        docId,
+        headingPath: c.headingPath,
+        heading: c.heading,
+        title: frontmatter.title,
+        tags: frontmatter.tags ?? [],
+        content: sliceLines(c.fromLine, c.toLine),
+      })
+    }
+
+    // Centroid feeds the doc-level vector index so `kb related` keeps working
+    // without a separate doc-embedding pass.
+    const dim = embeddings[0].length
+    const out = new Float32Array(dim)
+    for (const v of embeddings) for (let i = 0; i < dim; i++) out[i] += v[i]
+    let norm = 0
+    for (let i = 0; i < dim; i++) {
+      out[i] /= embeddings.length
+      norm += out[i] * out[i]
+    }
+    norm = Math.sqrt(norm) || 1
+    for (let i = 0; i < dim; i++) out[i] /= norm
+    return out
   }
 
   /**
@@ -67,8 +178,10 @@ export class DocWorkflowService {
    * automatically when IndexService.deleteDoc runs.
    */
   async removeFromIndex(kb: string, docId: string): Promise<void> {
+    // chunkFts.deleteByDoc relies on chunks-table-as-bridge, so it must run
+    // before index.deleteDoc cascades through the chunks rows.
+    this.chunkFts.deleteByDoc(kb, docId)
     await this.index.deleteDoc(kb, docId)
-    this.fts.delete(kb, docId)
   }
 
   /**
@@ -97,24 +210,30 @@ export class DocWorkflowService {
       })
     }
 
+    // corrupt-id: index rows whose primary key ends in ".md" — symptom of
+    // pre-normalization writes (e.g. `kb update foo.md` on older versions
+    // planted a phantom row). `--fix` deletes the orphan row + cascades;
+    // the canonical row gets re-indexed via drift if needed.
+    const allDocs = await this.index.listDocs(kb)
+    for (const d of allDocs) {
+      if (d.id.toLowerCase().endsWith('.md')) {
+        issues.push({
+          type: 'corrupt-id',
+          severity: 'error',
+          file: toFilename(d.id),
+          details: `Index row id="${d.id}" has .md suffix; canonical id is "${d.id.slice(0, -3)}"`,
+        })
+      }
+    }
+
     const files = this.storage.listFiles(kb)
     for (const file of files) {
       const raw = this.storage.readRaw(kb, file)
+      issues.push(...this.lintRawDoc(raw, file))
+
+      // drift is the only check that compares against the persisted index,
+      // so it stays out of the dry-runnable lintRawDoc path.
       const parsed = this.parser.parse(raw)
-
-      const missing: string[] = []
-      if (!parsed.frontmatter.id) missing.push('id')
-      if (!parsed.frontmatter.title) missing.push('title')
-      if (!parsed.frontmatter.category) missing.push('category')
-      if (missing.length > 0) {
-        issues.push({
-          type: 'missing',
-          severity: 'error',
-          file,
-          details: `Missing frontmatter: ${missing.join(', ')}`,
-        })
-      }
-
       const fileHash = contentHash(parsed.body)
       const docId = toDocId(file)
       const indexDoc = await this.index.getDoc(kb, docId)
@@ -129,6 +248,122 @@ export class DocWorkflowService {
     }
 
     return issues
+  }
+
+  /**
+   * Per-doc lint subset that needs only the raw markdown — no disk/index
+   * access. Used by `lint()` for each file AND by `kb add/update --dry-run`
+   * to surface retrievability issues before the doc enters the index.
+   *
+   * Excludes KB-global checks (broken, orphan) and persistence-coupled
+   * checks (drift) — those live in lint() proper.
+   */
+  lintRawDoc(rawContent: string, filename: string): LintIssue[] {
+    const issues: LintIssue[] = []
+    const parsed = this.parser.parse(rawContent)
+    const docId = toDocId(filename)
+
+    const missing: string[] = []
+    if (!parsed.frontmatter.id) missing.push('id')
+    if (!parsed.frontmatter.title) missing.push('title')
+    if (!parsed.frontmatter.category) missing.push('category')
+    if (missing.length > 0) {
+      issues.push({
+        type: 'missing',
+        severity: 'error',
+        file: filename,
+        details: `Missing frontmatter: ${missing.join(', ')}`,
+      })
+    }
+
+    const suppressLint = new Set((parsed.frontmatter.suppressLint ?? []).map((s) => s.toLowerCase()))
+
+    if (!suppressLint.has('long-paragraph')) {
+      const longParagraphs = this.findLongParagraphs(parsed.body, LONG_PARAGRAPH_THRESHOLD)
+      for (const p of longParagraphs) {
+        issues.push({
+          type: 'long-paragraph',
+          severity: 'warning',
+          file: filename,
+          details: `line ${p.fromLine}: ${p.chars} chars`,
+        })
+      }
+    }
+
+    const wordCount = parsed.body.split(/\s+/).filter(Boolean).length
+    if (wordCount < DOC_TOO_SHORT_WORDS && !suppressLint.has('doc-too-short')) {
+      issues.push({
+        type: 'doc-too-short',
+        severity: 'warning',
+        file: filename,
+        details: `${wordCount} words`,
+      })
+    }
+    if (wordCount > DOC_TOO_LONG_WORDS && !suppressLint.has('doc-too-long')) {
+      issues.push({
+        type: 'doc-too-long',
+        severity: 'warning',
+        file: filename,
+        details: `${wordCount} words`,
+      })
+    }
+
+    if (suppressLint.has('chunk-merge')) return issues
+
+    const { mergedAway } = this.chunker.chunkWithMergeReport({
+      docId,
+      title: parsed.frontmatter.title,
+      category: parsed.frontmatter.category,
+      tags: parsed.frontmatter.tags,
+      rawFileContent: rawContent,
+      importantSections: parsed.frontmatter.importantSections,
+    })
+    const suppressed = new Set(
+      (parsed.frontmatter.suppressMergeWarn ?? []).map((s) => s.toLowerCase()),
+    )
+    for (const c of mergedAway) {
+      const heading = c.heading
+      if (heading && suppressed.has(heading.toLowerCase())) continue
+      issues.push({
+        type: 'chunk-merge',
+        severity: 'warning',
+        file: filename,
+        details: `"${heading ?? '(intro)'}" lines ${c.fromLine}-${c.toLine}`,
+      })
+    }
+
+    return issues
+  }
+
+  // v1 splits paragraphs on blank lines without tracking code-fence state, so
+  // a long fenced code block separated by blank lines internally would already
+  // count as multiple paragraphs (a benign false negative); a single fenced
+  // block over 1500 chars with no internal blanks correctly flags as one long
+  // paragraph. The agent who hits a false positive can break the surrounding
+  // prose into smaller paragraphs.
+  private findLongParagraphs(body: string, threshold: number): Array<{ fromLine: number; chars: number }> {
+    const lines = body.split('\n')
+    const result: Array<{ fromLine: number; chars: number }> = []
+    let curStart = -1
+    for (let i = 0; i < lines.length; i++) {
+      const isBlank = lines[i].trim() === ''
+      if (!isBlank && curStart < 0) {
+        curStart = i
+      } else if (isBlank && curStart >= 0) {
+        const text = lines.slice(curStart, i).join('\n')
+        if (text.length > threshold) {
+          result.push({ fromLine: curStart + 1, chars: text.length })
+        }
+        curStart = -1
+      }
+    }
+    if (curStart >= 0) {
+      const text = lines.slice(curStart).join('\n')
+      if (text.length > threshold) {
+        result.push({ fromLine: curStart + 1, chars: text.length })
+      }
+    }
+    return result
   }
 
   /**
@@ -156,17 +391,22 @@ export class DocWorkflowService {
           }
         }
       } else if (issue.type === 'drift') {
+        // Full re-index: stale chunks/FTS/embeddings need rebuilding, not just
+        // a contentHash bump. Otherwise search returns the old content while
+        // the lint warning silently disappears.
         const doc = this.storage.readDoc(kb, issue.file)
         const docId = toDocId(issue.file)
-        await this.index.upsertDoc(kb, {
-          id: docId,
-          title: doc.frontmatter.title,
-          category: doc.frontmatter.category,
-          tags: doc.frontmatter.tags,
-          filePath: issue.file,
-          contentHash: contentHash(doc.body),
-        })
+        await this.indexAndEmbed(kb, docId, doc.frontmatter)
         fixedCount++
+      } else if (issue.type === 'corrupt-id') {
+        // Heal: parse the bad id out of the details and remove its index row.
+        // The canonical row (id without .md) is left alone — drift handler
+        // will re-index it if it's stale.
+        const m = issue.details.match(/id="([^"]+)"/)
+        if (m) {
+          await this.removeFromIndex(kb, m[1])
+          fixedCount++
+        }
       }
     }
 
@@ -175,60 +415,22 @@ export class DocWorkflowService {
 
   /**
    * Full reindex: drop all index data and rebuild from files.
-   * Embeddings are computed in batches of 25 via `embedBatch` — much
-   * cheaper than per-doc `embed()` on multi-doc wikis. The optional
-   * `onProgress` callback fires once per doc (after batch embedding,
-   * during the per-doc DB write loop) so progress UI stays smooth.
+   * Each doc is chunked, chunks are embedded, and the doc embedding is
+   * the centroid of its chunk embeddings.
    */
   async reindex(kb: string, onProgress?: (current: number, total: number) => void): Promise<ReindexResult> {
     const startTime = Date.now()
-    const BATCH = 25
 
-    // index.dropAll empties the documents table; the AFTER DELETE trigger
-    // on the vec0 shadow keeps the vector index in lockstep automatically.
     await this.index.dropAll(kb)
-    this.fts.dropAll(kb)
+    this.chunkFts.dropAll(kb)
 
     const files = this.storage.listFiles(kb)
 
-    // Read & parse all docs up front. This is cheap (sync fs) compared to
-    // the per-doc DB + embedding work that follows.
-    const parsed = files.map((file) => {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
       const doc = this.storage.readDoc(kb, file)
-      return { file, docId: toDocId(file), doc, hash: contentHash(doc.body) }
-    })
-
-    let processed = 0
-    for (const batch of chunk(parsed, BATCH)) {
-      const texts = batch.map((p) => p.doc.body || p.doc.frontmatter.title)
-      const vectors = await this.embedding.embedBatch(texts)
-
-      for (let j = 0; j < batch.length; j++) {
-        const p = batch[j]
-        const vec = vectors[j]
-        await this.index.upsertDoc(kb, {
-          id: p.docId,
-          title: p.doc.frontmatter.title,
-          category: p.doc.frontmatter.category,
-          tags: p.doc.frontmatter.tags,
-          filePath: p.file,
-          contentHash: p.hash,
-        })
-
-        if (p.doc.links.length > 0) {
-          await this.index.upsertLinks(
-            kb,
-            p.docId,
-            p.doc.links.map((l) => ({ toId: toDocId(l.target), linkText: l.text })),
-          )
-        }
-
-        this.fts.upsert(kb, p.docId, p.doc.frontmatter.title, p.doc.frontmatter.tags || [], p.doc.body || '')
-        await this.index.setEmbedding(kb, p.docId, vec)
-
-        processed++
-        if (onProgress) onProgress(processed, parsed.length)
-      }
+      await this.indexAndEmbed(kb, toDocId(file), doc.frontmatter)
+      if (onProgress) onProgress(i + 1, files.length)
     }
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
@@ -249,7 +451,7 @@ export class DocWorkflowService {
     const linksUpdated = await this.linker.updateLinksAcrossKb(kb, oldFilename, newFilename)
 
     await this.removeFromIndex(kb, oldId)
-    await this.indexAndEmbed(kb, newId, frontmatter, doc.body, newFilename)
+    await this.indexAndEmbed(kb, newId, frontmatter)
 
     // Re-index links for docs that now reference the new filename
     const files = this.storage.listFiles(kb)

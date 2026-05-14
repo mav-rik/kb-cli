@@ -17,9 +17,13 @@ export declare class Chunk {
   id: string
   docId: string
   heading?: string
-  content: string
+  headingPath?: string
+  headingLevel?: number
+  fromLine: number
+  toLine: number
   position: number
   contentHash: string
+  embedding?: number[]
   static __is_atscript_annotated_type: true
   static type: TAtscriptTypeObject<keyof Chunk, Chunk>
   static metadata: TMetadataMap<AtscriptMetadata>
@@ -32,17 +36,25 @@ export declare class Chunk {
     "id": string
     "docId": string
     "heading"?: string
-    "content": string
+    "headingPath"?: string
+    "headingLevel"?: number
+    "fromLine": number
+    "toLine": number
     "position": number
     "contentHash": string
+    "embedding"?: number[]
   }
   static __ownProps: {
     "id": string
     "docId": string
     "heading"?: string
-    "content": string
+    "headingPath"?: string
+    "headingLevel"?: number
+    "fromLine": number
+    "toLine": number
     "position": number
     "contentHash": string
+    "embedding"?: number[]
   }
   
   static __pk: string

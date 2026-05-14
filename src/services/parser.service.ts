@@ -7,6 +7,9 @@ export interface DocFrontmatter {
   tags: string[]
   created: string   // ISO date string
   updated: string   // ISO date string
+  importantSections?: string[]
+  suppressMergeWarn?: string[]
+  suppressLint?: string[]
 }
 
 export interface DocLink {
@@ -42,7 +45,12 @@ export class ParserService {
    * Serialize frontmatter and body back into a full markdown string.
    */
   serialize(frontmatter: DocFrontmatter, body: string): string {
-    return matter.stringify(body.startsWith('\n') ? body : `\n${body}`, frontmatter)
+    const { importantSections, suppressMergeWarn, suppressLint, ...rest } = frontmatter
+    const data: Record<string, unknown> = { ...rest }
+    if (importantSections !== undefined) data.important_sections = importantSections
+    if (suppressMergeWarn !== undefined) data.suppress_merge_warn = suppressMergeWarn
+    if (suppressLint !== undefined) data.suppress_lint = suppressLint
+    return matter.stringify(body.startsWith('\n') ? body : `\n${body}`, data)
   }
 
   /**
@@ -66,7 +74,7 @@ export class ParserService {
    * Ensure frontmatter has all required fields with sensible defaults.
    */
   private normalizeFrontmatter(data: Record<string, unknown>): DocFrontmatter {
-    return {
+    const fm: DocFrontmatter = {
       id: String(data.id ?? ''),
       title: String(data.title ?? ''),
       category: String(data.category ?? ''),
@@ -74,5 +82,18 @@ export class ParserService {
       created: String(data.created ?? ''),
       updated: String(data.updated ?? ''),
     }
+    const important = coerceStringList(data.important_sections)
+    if (important) fm.importantSections = important
+    const suppress = coerceStringList(data.suppress_merge_warn)
+    if (suppress) fm.suppressMergeWarn = suppress
+    const suppressLint = coerceStringList(data.suppress_lint)
+    if (suppressLint) fm.suppressLint = suppressLint
+    return fm
   }
+}
+
+function coerceStringList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const out = value.filter((s): s is string => typeof s === 'string' && s.length > 0)
+  return out.length > 0 ? out : undefined
 }

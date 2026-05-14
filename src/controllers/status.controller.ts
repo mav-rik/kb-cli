@@ -10,7 +10,8 @@ export class StatusController {
     const lines: string[] = []
     const config = services.config
     const dataDir = config.getDataDir()
-    const defaultWiki = config.get('defaultWiki')
+    const effectiveDefault = config.resolveWikiName()
+    const defaultSource = config.defaultWikiSource()
     const configuredModel = config.get('embeddingModel')
     const schemaVersion = config.getSchemaVersion()
     const wikis = services.wikiManagement.list().sort()
@@ -46,7 +47,7 @@ export class StatusController {
       `Schema version: ${schemaVersion}${schemaVersion === CURRENT_SCHEMA_VERSION ? ' (current)' : ` (needs upgrade — run \`kb migrate\`)`}`,
     )
     lines.push(`Data dir: ${dataDir}`)
-    lines.push(`Default wiki: ${defaultWiki}`)
+    lines.push(`Default wiki: ${effectiveDefault} (${defaultSource === 'cwd' ? 'kb.config.json' : 'global config'})`)
     lines.push(`Wikis (${wikis.length}): ${wikis.length ? wikis.join(', ') : '<none>'}`)
 
     return lines.join('\n')

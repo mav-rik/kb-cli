@@ -2,6 +2,7 @@ import * as fs from 'node:fs'
 import { Controller, Cli, Param, CliOption, Description, Optional } from '@moostjs/event-cli'
 import { services } from '../services/container.js'
 import type { UpdatePatch } from '../services/wiki-ops.js'
+import type { LintIssue } from '../services/doc-workflow.service.js'
 
 @Controller()
 export class DocController {
@@ -18,6 +19,8 @@ export class DocController {
     @Description('Content') @CliOption('content', 'body', 'text') @Optional() content: string,
     @Description('File to ingest') @CliOption('file') @Optional() file: string,
     @Description('Read from stdin') @CliOption('stdin') stdin: boolean,
+    @Description('Lint only — no write, no index') @CliOption('dry-run') @Optional() dryRun: boolean,
+    @Description('Output format') @CliOption('format') @Optional() format: string,
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
     let body = ''
@@ -41,16 +44,17 @@ export class DocController {
       body = content
     }
 
+    const effectiveTitle = fileFrontmatter?.title || title
+    const effectiveCategory = fileFrontmatter?.category || category
+    const effectiveTags = fileFrontmatter?.tags?.length
+      ? fileFrontmatter.tags
+      : tags ? tags.split(',').map((t) => t.trim()) : []
+
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
     try {
-      const result = await ops.addDoc(
-        fileFrontmatter?.title || title,
-        fileFrontmatter?.category || category,
-        fileFrontmatter?.tags?.length ? fileFrontmatter.tags : tags ? tags.split(',').map(t => t.trim()) : [],
-        body,
-      )
-      return `Created: ${result.filename}`
+      const result = await ops.addDoc(effectiveTitle, effectiveCategory, effectiveTags, body, { dryRun })
+      return formatOpResult('add', result.filename, result.issues, format, dryRun)
     } catch (err: any) {
       return `Error: ${err.message}`
     }
@@ -65,6 +69,8 @@ export class DocController {
     @Description('New tags') @CliOption('tags') @Optional() tags: string,
     @Description('Replace content') @CliOption('content') @Optional() content: string,
     @Description('Append content') @CliOption('append') @Optional() append: string,
+    @Description('Lint only — no write, no index') @CliOption('dry-run') @Optional() dryRun: boolean,
+    @Description('Output format') @CliOption('format') @Optional() format: string,
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
@@ -77,8 +83,8 @@ export class DocController {
     if (append !== undefined) patch.append = append
 
     try {
-      const result = await ops.updateDoc(id, patch)
-      return `Updated: ${result.filename}`
+      const result = await ops.updateDoc(id, patch, { dryRun })
+      return formatOpResult('update', result.filename, result.issues, format, dryRun)
     } catch (err: any) {
       return `Error: ${err.message}`
     }
@@ -161,6 +167,38 @@ export class DocController {
     if (cats.length === 0) return 'No categories found.'
     return cats.join('\n')
   }
+}
+
+function formatOpResult(
+  op: 'add' | 'update',
+  filename: string,
+  issues: LintIssue[],
+  format: string | undefined,
+  dryRun: boolean,
+): string {
+  if (format === 'json') {
+    return JSON.stringify({ dryRun, op, filename, issues }, null, 2)
+  }
+  const verb = dryRun
+    ? (op === 'add' ? 'Would create' : 'Would update')
+    : (op === 'add' ? 'Created' : 'Updated')
+  if (issues.length === 0) {
+    return dryRun
+      ? `${verb}: ${filename}\nDry-run: 0 issues. Safe to ${op}.`
+      : `${verb}: ${filename}`
+  }
+  const lines: string[] = [`${verb}: ${filename}`, '']
+  const prefix = dryRun ? 'Dry-run found' : 'Lint:'
+  lines.push(`${prefix} ${issues.length} issue${issues.length === 1 ? '' : 's'}:`)
+  lines.push('')
+  lines.push('Type     | Severity | Details')
+  lines.push('---------|----------|---------------------------------')
+  for (const issue of issues) {
+    const type = issue.type.padEnd(8)
+    const severity = issue.severity.padEnd(8)
+    lines.push(`${type} | ${severity} | ${issue.details}`)
+  }
+  return lines.join('\n')
 }
 
 function readStdin(): Promise<string> {

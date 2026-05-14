@@ -93,6 +93,10 @@ export class SchemaService {
     lines.push(`- Frontmatter: id, title, category, tags, created, updated`)
     lines.push(`- One concept per document, 50-200 lines target`)
     lines.push('')
+    lines.push(`## Writing for retrieval`)
+    lines.push('')
+    lines.push(`See \`kb skill update\` for chunk-aware authoring guidance (section size, topic sentences, tag specificity, doc length).`)
+    lines.push('')
     const SAMPLE_DOCS_PER_CATEGORY = 5
     lines.push(`## Sample Documents`)
     lines.push('')

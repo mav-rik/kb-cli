@@ -1,7 +1,7 @@
 import { StorageService } from './storage.service.js'
 import { ParserService } from './parser.service.js'
 import { IndexService } from './index.service.js'
-import { toDocId } from '../utils/slug.js'
+import { toDocId, toFilename } from '../utils/slug.js'
 
 export class LinkerService {
   constructor(
@@ -68,6 +68,6 @@ export class LinkerService {
   async getBacklinks(kb: string, filename: string): Promise<string[]> {
     const id = toDocId(filename)
     const incomingLinks = await this.index.getLinksTo(kb, id)
-    return incomingLinks.map((link) => `${link.fromId}.md`)
+    return incomingLinks.map((link) => toFilename(link.fromId))
   }
 }
