@@ -1,9 +1,11 @@
 # Search Workflow — Retrieving Knowledge
 
-The wiki is a **graph**. `kb search` returns **ranked seed docs**, not exact answers — and not an existence check for a specific id. Real understanding comes from reading a seed, following its links, reading those, and continuing until you have enough context. One document is almost never enough.
+> **Search is for discovery. Resolve is for identity.** Two different tools — do not mix them up.
 
-**Use `kb search` when:** you want the most-relevant docs for a question or topic.
-**Use `kb resolve <handle>` when:** you want to know whether a specific doc exists (and what its canonical id/filename is). Search will rank-order even unrelated docs; resolve tells you yes/no with fuzzy suggestions.
+The wiki is a **graph**. `kb search` runs at the **chunk level** (each doc is split by H2/H3 headings into chunks, and each chunk is indexed independently for both BM25 keyword and embedding similarity). It returns up to N ranked **seed chunks** with their parent doc + section heading — not exact answers, not an existence check for a specific id, and not the whole doc. Real understanding comes from reading a seed, following its links, reading the linked docs, and continuing until you have enough context. One chunk is almost never enough.
+
+**Use `kb search` when:** you want the most-relevant chunks/docs for a question or topic — discovery.
+**Use `kb resolve <handle>` when:** you want to know whether a specific doc exists (and what its canonical id/filename is) — identity. Search will rank-order even unrelated docs; resolve tells you yes/no with fuzzy suggestions.
 
 ## Search modes
 
