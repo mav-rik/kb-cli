@@ -186,6 +186,16 @@ if (process.argv.length <= 2) {
   process.argv.push('--help')
 }
 
+// @prostojs/cli-help@0.0.11 computes width as `Math.min(process.stdout.columns,
+// maxWidth) - 1`. When stdout isn't a TTY (agents capturing `kb add --help`
+// from a subprocess pipe, CI, redirected to a file), `columns` is undefined
+// → Math.min returns NaN → every wrap math is NaN → renderer emits blank
+// rows with the descriptions stripped. Force a sensible width when no TTY
+// is attached so help is inspectable from non-interactive contexts.
+if (!process.stdout.isTTY && process.stdout.columns == null) {
+  ;(process.stdout as { columns?: number }).columns = 100
+}
+
 const cliApp = new CliApp()
   .controllers(AppController, WikiController, ConfigController, ReadController, DocController, SearchController, LintController, SkillController, SetupController, RemoteController, MigrateController, StatusController)
   .useHelp({ name: 'kb', title: 'kb — Wiki CLI for AI agents' })
