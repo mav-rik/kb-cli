@@ -21,11 +21,9 @@ export type DocHandle = string
 @meta.description 'POST /api/docs - create a new document.'
 export interface AddDocBody {
   @meta.required
-  @expect.minLength 1
   title: string
 
   @meta.required
-  @expect.minLength 1
   category: string
 
   tags?: string[]

@@ -1,9 +1,9 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { Controller, Cli, Param, CliOption, Description } from '@moostjs/event-cli'
-import { ValidatorError } from '@atscript/typescript/utils'
 import { services } from '../services/container.js'
 import { WikiName } from '../models/api-bodies.as'
+import { validateAgainstDto } from '../utils/dto-validate.js'
 
 @Controller('wiki')
 export class WikiController {
@@ -18,14 +18,8 @@ export class WikiController {
   create(@Param('name') name: string) {
     // Same atscript constraints as POST /api/wiki -> body.name. Single
     // source of truth for "valid wiki name" across CLI and HTTP.
-    try {
-      WikiName.validator().validate(name)
-    } catch (err) {
-      if (err instanceof ValidatorError) {
-        return `Error: invalid wiki name "${name}": ${err.errors.map((e) => e.message).join('; ')}`
-      }
-      throw err
-    }
+    const validationErr = validateAgainstDto(WikiName, name)
+    if (validationErr) return `Error: invalid wiki name "${name}": ${validationErr}`
     const result = this.wikiMgmt.create(name)
     if ('error' in result) return `Error: ${result.error}`
     return `Created wiki "${name}".`

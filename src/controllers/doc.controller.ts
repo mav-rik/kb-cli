@@ -1,29 +1,10 @@
 import * as fs from 'node:fs'
 import { Controller, Cli, Param, CliOption, Description, Optional } from '@moostjs/event-cli'
-import { ValidatorError } from '@atscript/typescript/utils'
 import { services } from '../services/container.js'
 import { composeDocInput } from '../services/wiki-ops.js'
 import { AddDocBody, UpdateDocBody } from '../models/api-bodies.as'
+import { validateAgainstDto } from '../utils/dto-validate.js'
 import type { LintIssue } from '../services/doc-workflow.service.js'
-
-/**
- * Run the shared (HTTP + CLI) DTO validator over a composed input. Returns
- * a formatted multi-line error string on failure, null on success. Uses
- * `unknownProps: 'ignore'` because DocInput's field set diverges slightly
- * from the wire-format DTOs (no body/content/text aliases on the CLI side).
- */
-function validateAgainstDto<T>(dto: { validator: (opts?: any) => { validate: (data: unknown, safe?: boolean) => boolean; errors: { path: string; message: string }[] } }, value: T): string | null {
-  const v = dto.validator({ unknownProps: 'ignore', errorLimit: 20 })
-  try {
-    v.validate(value)
-    return null
-  } catch (err) {
-    if (err instanceof ValidatorError) {
-      return err.errors.map((e) => (e.path ? `${e.path}: ${e.message}` : e.message)).join('\n')
-    }
-    throw err
-  }
-}
 
 @Controller()
 export class DocController {

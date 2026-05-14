@@ -70,7 +70,7 @@ export declare class AddDocBody {
 
 /**
  * Atscript interface **UpdateDocBody**
- * @see {@link ./api-bodies.as:51:18}
+ * @see {@link ./api-bodies.as:49:18}
  */
 export declare class UpdateDocBody {
   title?: string
@@ -99,7 +99,7 @@ export declare class UpdateDocBody {
 
 /**
  * Atscript interface **RenameDocBody**
- * @see {@link ./api-bodies.as:74:18}
+ * @see {@link ./api-bodies.as:72:18}
  */
 export declare class RenameDocBody {
   newId?: string
@@ -118,7 +118,7 @@ export declare class RenameDocBody {
 
 /**
  * Atscript interface **CreateWikiBody**
- * @see {@link ./api-bodies.as:82:18}
+ * @see {@link ./api-bodies.as:80:18}
  */
 export declare class CreateWikiBody {
   name: string
@@ -134,7 +134,7 @@ export declare class CreateWikiBody {
 
 /**
  * Atscript interface **LogAddBody**
- * @see {@link ./api-bodies.as:88:18}
+ * @see {@link ./api-bodies.as:86:18}
  */
 export declare class LogAddBody {
   op?: "ingest" | "query" | "lint" | "note"
