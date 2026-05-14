@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@prostojs/cli-help': ^0.0.12
+
 importers:
 
   .:
@@ -314,8 +317,8 @@ packages:
   '@prostojs/cache@0.0.1':
     resolution: {integrity: sha512-DQH+nAFBGGCYq11x2Cc9xYjiIsNCR+pVgzC5Y409opTQBPXqyGg7v7kVJcgwfYBJBwXvem6wen13Ae71teNXhA==}
 
-  '@prostojs/cli-help@0.0.11':
-    resolution: {integrity: sha512-np81HSuR7q9NMuiGhBM47wBJunMAGSeCd1bkzgqINoKmM7dB19P0+wE5p+EYFxK+FbE+7Pz2IY0mNd8OJuHv+g==}
+  '@prostojs/cli-help@0.0.12':
+    resolution: {integrity: sha512-mUpJFU7/cIULB4pQoPd8OzwiO3wZlt7NGoF4IwNdwa9UUNDi1SA8pyRPGM8v9Gd3iKjygZf8LVHW7WrLZ7ySfg==}
 
   '@prostojs/infact@0.4.1':
     resolution: {integrity: sha512-FX4Vi0skyUg2IwSonotLKeWoStYVmJQ7yre5wg3IrtkyCAhqKh5G/ZFiJpmZM+X9Ixiu9cDUQmAzoph/fTqdpA==}
@@ -1487,7 +1490,7 @@ snapshots:
 
   '@prostojs/cache@0.0.1': {}
 
-  '@prostojs/cli-help@0.0.11': {}
+  '@prostojs/cli-help@0.0.12': {}
 
   '@prostojs/infact@0.4.1': {}
 
@@ -1700,7 +1703,7 @@ snapshots:
 
   '@wooksjs/event-cli@0.7.11(@prostojs/logger@0.4.3)(@prostojs/router@0.3.3)(@wooksjs/event-core@0.7.11)(wooks@0.7.11)':
     dependencies:
-      '@prostojs/cli-help': 0.0.11
+      '@prostojs/cli-help': 0.0.12
       '@prostojs/logger': 0.4.3
       '@prostojs/router': 0.3.3
       '@wooksjs/event-core': 0.7.11
