@@ -46,6 +46,7 @@
     "@atscript/core": "^0.1.53",
     "@atscript/db": "^0.1.74",
     "@atscript/db-sqlite": "^0.1.74",
+    "@atscript/moost-validator": "^0.1.54",
     "@atscript/typescript": "^0.1.53",
     "@huggingface/transformers": "^4.2.0",
     "@moostjs/event-cli": "^0.6.9",

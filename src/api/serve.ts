@@ -1,6 +1,7 @@
 import * as http from 'node:http'
 import { Moost } from 'moost'
 import { MoostHttp } from '@moostjs/event-http'
+import { validatorPipe, validationErrorTransform } from '@atscript/moost-validator'
 import { ApiController } from './api.controller.js'
 import { services } from '../services/container.js'
 import { LocalServerService } from '../services/local-server.service.js'
@@ -20,6 +21,11 @@ export async function startServer(port: number, secret?: string): Promise<void> 
   }
 
   const app = new Moost()
+  // Every @Body() param typed with a .as interface gets validated; any
+  // ValidatorError becomes an HTTP 400 with the offending field path in the
+  // body. Controllers see only valid input — no per-handler shape checks.
+  app.applyGlobalPipes(validatorPipe())
+  app.applyGlobalInterceptors(validationErrorTransform())
   const moostHttp = new MoostHttp()
   app.adapter(moostHttp)
   app.registerControllers(ApiController)

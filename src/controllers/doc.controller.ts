@@ -1,8 +1,29 @@
 import * as fs from 'node:fs'
 import { Controller, Cli, Param, CliOption, Description, Optional } from '@moostjs/event-cli'
+import { ValidatorError } from '@atscript/typescript/utils'
 import { services } from '../services/container.js'
 import { composeDocInput } from '../services/wiki-ops.js'
+import { AddDocBody, UpdateDocBody } from '../models/api-bodies.as'
 import type { LintIssue } from '../services/doc-workflow.service.js'
+
+/**
+ * Run the shared (HTTP + CLI) DTO validator over a composed input. Returns
+ * a formatted multi-line error string on failure, null on success. Uses
+ * `unknownProps: 'ignore'` because DocInput's field set diverges slightly
+ * from the wire-format DTOs (no body/content/text aliases on the CLI side).
+ */
+function validateAgainstDto<T>(dto: { validator: (opts?: any) => { validate: (data: unknown, safe?: boolean) => boolean; errors: { path: string; message: string }[] } }, value: T): string | null {
+  const v = dto.validator({ unknownProps: 'ignore', errorLimit: 20 })
+  try {
+    v.validate(value)
+    return null
+  } catch (err) {
+    if (err instanceof ValidatorError) {
+      return err.errors.map((e) => (e.path ? `${e.path}: ${e.message}` : e.message)).join('\n')
+    }
+    throw err
+  }
+}
 
 @Controller()
 export class DocController {
@@ -47,6 +68,11 @@ export class DocController {
         tags: tags ? tags.split(',').map((t) => t.trim()) : undefined,
       },
     })
+
+    // Same DTO validator that runs on POST /api/docs — single source of
+    // truth for "what counts as a valid add body" across CLI and HTTP.
+    const validationErr = validateAgainstDto(AddDocBody, input)
+    if (validationErr) return `Error: ${validationErr}`
 
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
@@ -98,6 +124,10 @@ export class DocController {
         tags: tags ? tags.split(',').map((t) => t.trim()) : undefined,
       },
     })
+
+    // Same DTO validator that runs on PUT /api/docs/:id.
+    const validationErr = validateAgainstDto(UpdateDocBody, input)
+    if (validationErr) return `Error: ${validationErr}`
 
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)

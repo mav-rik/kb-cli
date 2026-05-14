@@ -4,31 +4,20 @@ import { services } from '../services/container.js'
 import { parseLineRange } from '../utils/slug.js'
 import { readContent } from '../utils/content.js'
 import { LocalWikiOps, DocNotFoundError, InvalidDocInputError, composeDocInput, type DocInput } from '../services/wiki-ops.js'
+import {
+  AddDocBody,
+  UpdateDocBody,
+  RenameDocBody,
+  CreateWikiBody,
+  LogAddBody,
+} from '../models/api-bodies.as'
 
-/**
- * The wire shape POST/PUT /api/docs accepts. Both `body` (canonical) and
- * legacy `content`/`text` aliases are accepted. `apiBodyToInput` funnels
- * the wire payload through the SAME `composeDocInput` used by the CLI, so
- * suppression / frontmatter handling is identical regardless of caller.
- */
-interface ApiDocBody {
-  title?: string
-  category?: string
-  tags?: string[]
-  body?: string
-  content?: string
-  text?: string
-  appendBody?: string
-  append?: string
-  raw?: string
-  dryRun?: boolean
-  wiki?: string
-  importantSections?: string[]
-  suppressMergeWarn?: string[]
-  suppressLint?: string[]
-}
+// The wire-format DTOs (validated by @atscript/moost-validator before the
+// handler runs) share an interchangeable shape for body content + suppression
+// fields, so a single funnel converts either into the canonical DocInput.
+type DocLikeBody = AddDocBody | UpdateDocBody
 
-function apiBodyToInput(body: ApiDocBody): DocInput {
+function apiBodyToInput(body: DocLikeBody): DocInput {
   // `raw` lets HTTP callers send a full markdown blob (frontmatter + body)
   // and have the server parse it just like `kb add --file`.
   const rawFileContent = body.raw
@@ -39,7 +28,7 @@ function apiBodyToInput(body: ApiDocBody): DocInput {
     parser: services.parser,
     rawFileContent,
     rawBody,
-    appendBody: body.appendBody ?? body.append,
+    appendBody: 'appendBody' in body ? (body.appendBody ?? body.append) : undefined,
     overrides: {
       title: body.title,
       category: body.category,
@@ -79,7 +68,6 @@ function sliceLines(content: string, lines?: string): string {
 @Controller('api')
 export class ApiController {
   private get config() { return services.config }
-  private get storage() { return services.storage }
   private get index() { return services.index }
   private get searchService() { return services.search }
   private get workflow() { return services.docWorkflow }
@@ -179,7 +167,7 @@ export class ApiController {
 
   @Post('docs')
   @SetStatus(201)
-  async addDoc(@Body() body: ApiDocBody) {
+  async addDoc(@Body() body: AddDocBody) {
     const wikiName = this.config.resolveWikiName(body.wiki)
     try {
       return await this.localOps(wikiName).addDoc(apiBodyToInput(body), { dryRun: body.dryRun })
@@ -189,7 +177,7 @@ export class ApiController {
   }
 
   @Put('docs/:id')
-  async updateDoc(@Param('id') id: string, @Body() body: ApiDocBody) {
+  async updateDoc(@Param('id') id: string, @Body() body: UpdateDocBody) {
     const wikiName = this.config.resolveWikiName(body.wiki)
     try {
       return await this.localOps(wikiName).updateDoc(id, apiBodyToInput(body), { dryRun: body.dryRun })
@@ -233,7 +221,7 @@ export class ApiController {
   }
 
   @Post('docs/:id/rename')
-  async renameDoc(@Param('id') id: string, @Body() body: { newId?: string; to?: string; name?: string; wiki?: string }) {
+  async renameDoc(@Param('id') id: string, @Body() body: RenameDocBody) {
     const wikiName = this.config.resolveWikiName(body.wiki)
     const rawNewId = body.newId || body.to || body.name
     if (!rawNewId) {
@@ -280,7 +268,7 @@ export class ApiController {
 
   @Post('wiki')
   @SetStatus(201)
-  createWiki(@Body() body: { name: string }) {
+  createWiki(@Body() body: CreateWikiBody) {
     return this.wikiMgmt.create(body.name)
   }
 
@@ -350,10 +338,11 @@ export class ApiController {
   }
 
   @Post('log')
-  logAdd(@Body() body: { op?: string; doc?: string; details?: string; wiki?: string }) {
+  logAdd(@Body() body: LogAddBody) {
     const wikiName = this.config.resolveWikiName(body.wiki)
-    this.activityLog.log(wikiName, body.op || 'note', body.doc, body.details)
-    return { logged: true, op: body.op || 'note', doc: body.doc, details: body.details }
+    const op = body.op || 'note'
+    this.activityLog.log(wikiName, op, body.doc, body.details)
+    return { logged: true, op, doc: body.doc, details: body.details }
   }
 
   // ─── Wiki Use ──────────────────────────────────────────────────────────────
