@@ -226,11 +226,17 @@ function formatOpResult(
   lines.push('')
   lines.push('Type     | Severity | Details')
   lines.push('---------|----------|---------------------------------')
+  // Print each issue type's hint only once — multiple flags of the same
+  // type don't need the same pointer repeated for every occurrence.
+  const shownHints = new Set<string>()
   for (const issue of issues) {
     const type = issue.type.padEnd(8)
     const severity = issue.severity.padEnd(8)
     lines.push(`${type} | ${severity} | ${issue.details}`)
-    if (issue.hint) lines.push(`         |          |   ↳ ${issue.hint}`)
+    if (issue.hint && !shownHints.has(issue.type)) {
+      lines.push(`         |          |   ↳ ${issue.hint}`)
+      shownHints.add(issue.type)
+    }
   }
   return lines.join('\n')
 }

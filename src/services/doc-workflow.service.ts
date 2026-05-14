@@ -347,15 +347,12 @@ export class DocWorkflowService {
     for (const c of mergedAway) {
       const heading = c.heading
       if (heading && suppressed.has(heading.toLowerCase())) continue
-      const hint = heading
-        ? `If "${heading}" is intentional, add it to frontmatter important_sections (preserve) or suppress_merge_warn (silence). Otherwise restructure / expand the section.`
-        : `Move intro content under a heading, or expand it past ~160 chars / drop link-heavy syntax.`
       issues.push({
         type: 'chunk-merge',
         severity: 'warning',
         file: filename,
         details: `"${heading ?? '(intro)'}" lines ${c.fromLine}-${c.toLine}`,
-        hint,
+        hint: `Add intentional section names to frontmatter important_sections (preserve) or suppress_merge_warn (silence). Otherwise restructure / expand the section past ~160 chars and <50% link syntax.`,
       })
     }
 

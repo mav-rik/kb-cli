@@ -77,12 +77,19 @@ export class LintController {
     lines.push('')
     lines.push('Type     | Severity | File            | Details')
     lines.push('---------|----------|-----------------|----------------------------------')
+    // Print each (file, type) hint only once — multiple chunk-merges on the
+    // same doc don't need the same pointer repeated for every section.
+    const shownHints = new Set<string>()
     for (const issue of issues) {
       const type = issue.type.padEnd(8)
       const severity = issue.severity.padEnd(8)
       const file = issue.file.padEnd(15)
       lines.push(`${type} | ${severity} | ${file} | ${issue.details}`)
-      if (issue.hint) lines.push(`         |          |                 |   ↳ ${issue.hint}`)
+      const hintKey = `${issue.file}::${issue.type}`
+      if (issue.hint && !shownHints.has(hintKey)) {
+        lines.push(`         |          |                 |   ↳ ${issue.hint}`)
+        shownHints.add(hintKey)
+      }
     }
 
     if (fix && repairs.length > 0) {
