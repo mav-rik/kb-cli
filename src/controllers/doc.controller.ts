@@ -69,17 +69,50 @@ export class DocController {
     @Description('New tags') @CliOption('tags') @Optional() tags: string,
     @Description('Replace content') @CliOption('content') @Optional() content: string,
     @Description('Append content') @CliOption('append') @Optional() append: string,
+    @Description('Replace content from file (parses optional frontmatter)') @CliOption('file') @Optional() file: string,
+    @Description('Read replacement content from stdin') @CliOption('stdin') stdin: boolean,
     @Description('Lint only — no write, no index') @CliOption('dry-run') @Optional() dryRun: boolean,
     @Description('Output format') @CliOption('format') @Optional() format: string,
     @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: string,
   ): Promise<string> {
+    const sources = [file, stdin ? '<stdin>' : undefined, content, append].filter(Boolean)
+    if (sources.length > 1) {
+      return `Error: --file, --stdin, --content, and --append are mutually exclusive (got ${sources.length}). Pick one.`
+    }
+
+    let resolvedContent: string | undefined = content
+    let fileFrontmatter: { title?: string; category?: string; tags?: string[] } | undefined
+
+    if (file) {
+      if (!fs.existsSync(file)) {
+        return `Error: File "${file}" not found.`
+      }
+      const raw = fs.readFileSync(file, 'utf-8')
+      if (raw.startsWith('---')) {
+        const parsed = this.parser.parse(raw)
+        resolvedContent = parsed.body
+        fileFrontmatter = parsed.frontmatter
+      } else {
+        resolvedContent = raw
+      }
+    } else if (stdin) {
+      resolvedContent = await readStdin()
+    }
+
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
     const patch: UpdatePatch = {}
-    if (title !== undefined) patch.title = title
-    if (category !== undefined) patch.category = category
-    if (tags !== undefined) patch.tags = tags.split(',').map(t => t.trim())
-    if (content !== undefined) patch.content = content
+    // File frontmatter overrides explicit CLI flags only when the CLI flag
+    // wasn't provided — explicit flags always win.
+    const effectiveTitle = title ?? fileFrontmatter?.title
+    const effectiveCategory = category ?? fileFrontmatter?.category
+    const effectiveTags = tags !== undefined
+      ? tags.split(',').map((t) => t.trim())
+      : fileFrontmatter?.tags
+    if (effectiveTitle !== undefined) patch.title = effectiveTitle
+    if (effectiveCategory !== undefined) patch.category = effectiveCategory
+    if (effectiveTags !== undefined) patch.tags = effectiveTags
+    if (resolvedContent !== undefined) patch.content = resolvedContent
     if (append !== undefined) patch.append = append
 
     try {

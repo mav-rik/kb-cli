@@ -511,8 +511,9 @@ describe('DocWorkflowService chunk integration', () => {
     expect(corrupt[0].severity).toBe('error')
     expect(corrupt[0].details).toContain('id="beta.md"')
 
-    const fixed = await services.docWorkflow.lintFix('w', corrupt)
-    expect(fixed).toBe(1)
+    const repairs = await services.docWorkflow.lintFix('w', corrupt)
+    expect(repairs).toHaveLength(1)
+    expect(repairs[0]).toMatchObject({ type: 'corrupt-id' })
 
     const afterDocs = await services.index.listDocs('w')
     expect(afterDocs).toHaveLength(1)
@@ -533,8 +534,9 @@ describe('DocWorkflowService chunk integration', () => {
     const drift = issues.filter((i) => i.type === 'drift')
     expect(drift.length).toBe(1)
 
-    const fixed = await services.docWorkflow.lintFix('w', drift)
-    expect(fixed).toBe(1)
+    const repairs = await services.docWorkflow.lintFix('w', drift)
+    expect(repairs).toHaveLength(1)
+    expect(repairs[0]).toMatchObject({ type: 'drift', file: 'alpha.md' })
 
     // Embedding pass must have run again — proves chunks were rebuilt, not
     // just the doc-row hash bumped.

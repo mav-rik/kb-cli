@@ -279,8 +279,8 @@ export class ApiController {
   async lintFix(@Query('wiki') wiki: string) {
     const wikiName = this.config.resolveWikiName(wiki)
     const issues = await this.workflow.lint(wikiName)
-    const fixed = await this.workflow.lintFix(wikiName, issues)
-    return { fixed }
+    const repairs = await this.workflow.lintFix(wikiName, issues)
+    return { fixed: repairs.length, repairs }
   }
 
   // ─── Reindex ──────────────────────────────────────────────────────────────

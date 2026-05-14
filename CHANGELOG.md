@@ -27,6 +27,23 @@ Retrieval-quality release. Documents are now chunked by H2/H3 heading and search
 - **`kb wiki list` and `kb status` now mark the effective default wiki** (`*` prefix) and surface its source (`kb.config.json in this directory` vs `global config`) — so agents in a project know which wiki commands will actually target.
 - **New lint type `corrupt-id`** (error): flags index rows whose id ends in `.md` — a symptom of the duplicate-row bug below in pre-0.3 wikis. `kb lint --fix` removes the orphan row; `drift` re-indexes the canonical row.
 
+### Added
+
+- **`kb lint --fix` now reports what it repaired**, grouped by kind. Sample output:
+
+  ```
+  Fixed 3 issues:
+    Reindexed (drift) (2):
+      - authentication-mfa-and-session-model
+      - lead-processing-and-crm-delivery-workflow
+    Broken links removed (1):
+      - foo — removed broken link to bar.md
+  ```
+
+  JSON output (`--format json`) now carries `repairs: [{ type, file, action }]` alongside the existing `fixed` count. Service-level `lintFix` returns the repair list directly (was: just a count); HTTP `POST /api/lint/fix` returns `{ fixed, repairs }`.
+
+- **`kb update --file <path>`** (and `kb update --stdin`) — mirrors `kb add`'s `--file`/`--stdin` for replacement content. Removes the `--content "$(cat file)"` quoting awkwardness for wiki-sync workflows. If the file starts with frontmatter, it's parsed: explicit CLI `--title`/`--category`/`--tags` still win, but anything not passed on the CLI falls back to the file's frontmatter. `--file`, `--stdin`, `--content`, and `--append` are mutually exclusive.
+
 ### Fixed
 
 - **`kb update <missing-id>` no longer crashes with `Cannot read properties of undefined (reading 'length')`.** Root cause was a two-bug stack: (1) the HTTP API caught service errors and returned them as `{ error }` with status 200, so the remote client treated them as successful `WriteResult` payloads; (2) the CLI then accessed `result.issues.length` on the malformed payload. Now: (a) mutation/read endpoints throw `HttpError(404, …)` with a structured body so the remote client raises a proper `RemoteError`; (b) `RemoteError` carries the server's actual message (read from `body.message`, which is where `HttpError` puts custom text — `body.error` is the generic HTTP status name like "Not Found"). All mutations (`update`, `delete`, `rename`, `reindex <id>`, `read`) now emit the same multi-line error from one source: `DocNotFoundError` with fuzzy suggestions inline. No need to manually run `kb resolve` afterward.

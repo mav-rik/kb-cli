@@ -1,7 +1,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import type { SearchMode, SearchResult, RelatedResult } from './search.service.js'
-import type { LintIssue, ReindexResult } from './doc-workflow.service.js'
+import type { LintIssue, LintRepair, ReindexResult } from './doc-workflow.service.js'
 import type { ParsedDoc, DocFrontmatter, ParserService } from './parser.service.js'
 import type { RemoteClient } from './remote-client.js'
 import { RemoteError } from './remote-client.js'
@@ -108,7 +108,7 @@ export interface WikiOps {
   categories(): Promise<string[]>
   related(id: string, limit: number): Promise<RelatedResult[]>
   lint(): Promise<LintIssue[]>
-  lintFix(): Promise<{ fixed: number }>
+  lintFix(): Promise<{ fixed: number; repairs: LintRepair[] }>
   reindex(onProgress?: (current: number, total: number) => void): Promise<ReindexResult>
   reindexDoc(id: string): Promise<{ id: string; filename: string }>
   toc(): Promise<TocResult>
@@ -295,10 +295,10 @@ export class LocalWikiOps implements WikiOps {
     return this.svc.workflow.lint(this.kb)
   }
 
-  async lintFix(): Promise<{ fixed: number }> {
+  async lintFix(): Promise<{ fixed: number; repairs: LintRepair[] }> {
     const issues = await this.svc.workflow.lint(this.kb)
-    const fixed = await this.svc.workflow.lintFix(this.kb, issues)
-    return { fixed }
+    const repairs = await this.svc.workflow.lintFix(this.kb, issues)
+    return { fixed: repairs.length, repairs }
   }
 
   async reindex(onProgress?: (current: number, total: number) => void): Promise<ReindexResult> {
@@ -453,8 +453,8 @@ export class RemoteWikiOps implements WikiOps {
     return this.client.lint(this.url, this.wiki, this.secret)
   }
 
-  async lintFix(): Promise<{ fixed: number }> {
-    return this.client.lintFix(this.url, this.wiki, this.secret)
+  async lintFix(): Promise<{ fixed: number; repairs: LintRepair[] }> {
+    return this.client.lintFix(this.url, this.wiki, this.secret) as Promise<{ fixed: number; repairs: LintRepair[] }>
   }
 
   async reindex(): Promise<ReindexResult> {

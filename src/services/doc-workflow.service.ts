@@ -34,6 +34,12 @@ export interface ReindexResult {
   elapsed: string
 }
 
+export interface LintRepair {
+  type: 'broken' | 'drift' | 'corrupt-id'
+  file: string
+  action: string
+}
+
 export class DocWorkflowService {
   constructor(
     private parser: ParserService,
@@ -370,8 +376,8 @@ export class DocWorkflowService {
    * Fix auto-fixable lint issues (broken links and index drift).
    * Returns the number of fixes applied.
    */
-  async lintFix(kb: string, issues: LintIssue[]): Promise<number> {
-    let fixedCount = 0
+  async lintFix(kb: string, issues: LintIssue[]): Promise<LintRepair[]> {
+    const repairs: LintRepair[] = []
 
     for (const issue of issues) {
       if (issue.type === 'broken') {
@@ -387,7 +393,7 @@ export class DocWorkflowService {
           if (fixed !== raw) {
             const parsed = this.parser.parse(fixed)
             this.storage.writeDoc(kb, issue.file, parsed.frontmatter, parsed.body)
-            fixedCount++
+            repairs.push({ type: 'broken', file: issue.file, action: `removed broken link to ${target}` })
           }
         }
       } else if (issue.type === 'drift') {
@@ -397,7 +403,7 @@ export class DocWorkflowService {
         const doc = this.storage.readDoc(kb, issue.file)
         const docId = toDocId(issue.file)
         await this.indexAndEmbed(kb, docId, doc.frontmatter)
-        fixedCount++
+        repairs.push({ type: 'drift', file: issue.file, action: 'reindexed (content changed since last index)' })
       } else if (issue.type === 'corrupt-id') {
         // Heal: parse the bad id out of the details and remove its index row.
         // The canonical row (id without .md) is left alone — drift handler
@@ -405,12 +411,12 @@ export class DocWorkflowService {
         const m = issue.details.match(/id="([^"]+)"/)
         if (m) {
           await this.removeFromIndex(kb, m[1])
-          fixedCount++
+          repairs.push({ type: 'corrupt-id', file: issue.file, action: `removed orphan index row "${m[1]}"` })
         }
       }
     }
 
-    return fixedCount
+    return repairs
   }
 
   /**

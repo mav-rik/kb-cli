@@ -1,7 +1,36 @@
 import { Controller, Cli, Param, CliOption, Description, Optional } from '@moostjs/event-cli'
 import { services } from '../services/container.js'
-import { toFilename } from '../utils/slug.js'
-import type { LintIssue } from '../services/doc-workflow.service.js'
+import { toFilename, toDocId } from '../utils/slug.js'
+import type { LintIssue, LintRepair } from '../services/doc-workflow.service.js'
+
+const REPAIR_LABELS: Record<LintRepair['type'], string> = {
+  drift: 'Reindexed (drift)',
+  broken: 'Broken links removed',
+  'corrupt-id': 'Corrupt index rows removed',
+}
+
+function renderRepairs(repairs: LintRepair[]): string[] {
+  if (repairs.length === 0) return []
+  const grouped: Record<string, LintRepair[]> = {}
+  for (const r of repairs) (grouped[r.type] ||= []).push(r)
+  const out: string[] = []
+  // Stable order: drift, broken, corrupt-id.
+  for (const type of ['drift', 'broken', 'corrupt-id'] as const) {
+    const list = grouped[type]
+    if (!list || list.length === 0) continue
+    out.push(`  ${REPAIR_LABELS[type]} (${list.length}):`)
+    for (const r of list) {
+      // For drift the file IS the doc id (action is generic); show just the id.
+      // For broken/corrupt the file is the affected doc, action carries the detail.
+      if (type === 'drift') {
+        out.push(`    - ${toDocId(r.file)}`)
+      } else {
+        out.push(`    - ${toDocId(r.file)} — ${r.action}`)
+      }
+    }
+  }
+  return out
+}
 
 @Controller()
 export class LintController {
@@ -18,23 +47,27 @@ export class LintController {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
     let issues: LintIssue[]
-    let fixedCount = 0
+    let repairs: LintRepair[] = []
 
     if (fix) {
       const result = await ops.lintFix()
       issues = await ops.lint()
-      fixedCount = result.fixed
+      // Older `kb serve` versions return `{ fixed }` only; coerce to keep
+      // the CLI working against pre-0.3.1 servers.
+      repairs = result.repairs ?? []
     } else {
       issues = await ops.lint()
     }
 
     if (format === 'json') {
-      return JSON.stringify({ issues, fixed: fixedCount }, null, 2)
+      return JSON.stringify({ issues, fixed: repairs.length, repairs }, null, 2)
     }
 
     if (issues.length === 0) {
-      if (fix && fixedCount > 0) {
-        return `All ${fixedCount} issues fixed.`
+      if (fix && repairs.length > 0) {
+        const lines = [`All ${repairs.length} issues fixed:`]
+        lines.push(...renderRepairs(repairs))
+        return lines.join('\n')
       }
       return `Lint: 0 issues found. All clear!`
     }
@@ -51,9 +84,10 @@ export class LintController {
       lines.push(`${type} | ${severity} | ${file} | ${issue.details}`)
     }
 
-    if (fix && fixedCount > 0) {
+    if (fix && repairs.length > 0) {
       lines.push('')
-      lines.push(`Fixed ${fixedCount} issues.`)
+      lines.push(`Fixed ${repairs.length} issues:`)
+      lines.push(...renderRepairs(repairs))
     }
 
     return lines.join('\n')
