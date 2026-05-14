@@ -1,5 +1,7 @@
 # Lint Workflow — Knowledge Base Maintenance
 
+> **Run this after every ingest/update session.** It catches structural issues (broken links, index drift, corrupt rows) and retrievability issues (short/long docs, oversized paragraphs, mergeable chunks) before they degrade search quality.
+
 Two levels of maintenance: structural (automated) and semantic (agent-driven review).
 
 ---

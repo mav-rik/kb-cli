@@ -42,14 +42,17 @@ kb update <related-id> --content "corrected content"
 
 ## Renaming
 
+> **`kb rename` is the canonical way to change a doc id. Do NOT hand-edit filenames in `~/.kb/<wiki>/docs/`** — that leaves the index, FTS rows, vector rows, and every incoming `[link](./old.md)` pointing at the old id, and `kb lint` will surface drift / broken links for every one of them.
+
 ```bash
 kb rename <old-id> <new-id>
 ```
 
 This automatically:
-- Renames the file
-- Updates all links across the KB pointing to the old name
-- Re-indexes
+- Renames the file on disk
+- Updates the `id:` field in frontmatter
+- Rewrites every relative markdown link in other docs that pointed at the old filename
+- Removes the old id from the index and re-indexes under the new id
 
 ## Deleting
 

@@ -1,5 +1,23 @@
 # Ingest Workflow — Storing New Knowledge
 
+## Quick start
+
+The whole loop, in five commands:
+
+```bash
+kb search "<topic>"                                  # 1. search — find existing seeds
+kb read <id>                                         # 2. read   — load context
+kb update <id> --append "..."                        # 3. update — extend an existing doc when it fits
+# — or —
+kb add --title "..." -c <cat> --dry-run --content "..."   # 3. add (dry-run) — preview lint
+kb add --title "..." -c <cat> --content "..."             # 4. add        — commit the new doc
+kb update <existing-id> --append "See also: [...](./new.md)"  # 5. link back — wire the new node into the graph
+```
+
+Read the rest of this file before doing real ingest work — the rules below are what make a doc actually findable later.
+
+---
+
 You are not just writing a document — you are adding a node to a graph that future agents will discover and traverse. Every ingestion decision should be made with that in mind.
 
 ## How knowledge gets discovered later
