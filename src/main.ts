@@ -20,19 +20,19 @@ import { isAllowedDuringMigration } from './migration-gate.js'
 @Controller()
 class AppController {
   @Cli('version')
-  @Description('Show version')
+  @Description('Print the installed kb-wiki version (from package.json, baked in at build time).')
   version() {
     return __VERSION__
   }
 
   @Cli('serve')
-  @Description('Start HTTP API server')
+  @Description('Start the HTTP API on localhost. Mirrors every CLI command as a REST endpoint and shares its data with the CLI. While this server runs, other `kb` invocations on the same machine auto-route through it, avoiding lock contention on better-sqlite3 and reusing the loaded embedding model. Records its PID/port in ~/.kb/.serve.json.')
   async serve(
-    @Description('Port number') @CliOption('port', 'p') @Optional() port: string,
-    @Description('Shared secret for access control') @CliOption('secret') @Optional() secret: string,
-    @Description('Fork the server into the background') @CliOption('detached', 'd') @Optional() detached: boolean,
-    @Description('When detached, redirect stdio (append mode) to this path') @CliOption('log') @Optional() logPath: string,
-    @Description('Stop the running local server (sends SIGTERM)') @CliOption('stop') @Optional() stop: boolean,
+    @Description('TCP port to listen on. Default: 4141.') @CliOption('port', 'p') @Optional() port: string,
+    @Description('Optional Bearer token. When set, every request must send `Authorization: Bearer <secret>` or get a 401. Use to gate exposure beyond localhost.') @CliOption('secret') @Optional() secret: string,
+    @Description('Fork into a background process and return immediately. Pair with --log to capture stdio. Without --log, child stdio goes to /dev/null.') @CliOption('detached', 'd') @Optional() detached: boolean,
+    @Description('When --detached is also set, append the forked server\'s stdout+stderr to this file. Has no effect without --detached.') @CliOption('log') @Optional() logPath: string,
+    @Description('Stop the currently running local server: looks up its PID from ~/.kb/.serve.json and sends SIGTERM. No-op if nothing is running.') @CliOption('stop') @Optional() stop: boolean,
   ): Promise<string | void> {
     if (stop) {
       return runStop()

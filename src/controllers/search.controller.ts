@@ -10,13 +10,13 @@ export class SearchController {
   private get gateway() { return services.gateway }
 
   @Cli('search/:query')
-  @Description('Search documents (hybrid semantic + keyword)')
+  @Description('Search documents at chunk level (H2/H3 sections). Default mode (`hybrid`) fuses semantic embedding similarity with BM25 keyword matching via Reciprocal Rank Fusion — best for natural-language queries. Each result includes the source filename, line range, and section heading path.')
   async search(
-    @Param('query') query: string,
-    @Description('Max results') @CliOption('limit', 'n') @Optional() limit: string,
-    @Description('Search mode: hybrid, fts, vec') @CliOption('mode', 'm') @Optional() mode: string,
-    @Description('Output format') @CliOption('format') @Optional() format: string,
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
+    @Description('Search query. Natural language works well in hybrid/vec modes; in fts mode it is parsed as an FTS5 query (supports `AND`, `OR`, `NEAR`, quoted phrases).') @Param('query') query: string,
+    @Description('Maximum number of chunk results to return. Default: 10. Each result is one chunk; a single doc can return up to 2 chunks.') @CliOption('limit', 'n') @Optional() limit: string,
+    @Description('Search mode. `hybrid` (default) = embeddings + BM25 fused. `fts` = BM25 keyword only (no model load, fastest). `vec` = embeddings only (no keyword boost).') @CliOption('mode', 'm') @Optional() mode: string,
+    @Description('Output format. Default: human-readable list. Use --format json for the raw array of result objects.') @CliOption('format') @Optional() format: string,
+    @Description('Target wiki name. Defaults to the wiki resolved from `kb.config.json` in the current directory, falling back to the global `defaultWiki`. Run `kb wiki list` to see available wikis.') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string | object> {
     const parsedLimit = limit ? parseInt(limit, 10) : 10
     const ref = this.config.resolveWiki(wiki)
@@ -36,12 +36,12 @@ export class SearchController {
   }
 
   @Cli('related/:id')
-  @Description('Find documents related to a given document')
+  @Description('Find documents semantically similar to a given doc. Embeds the source doc\'s title + body intro and runs vector similarity against all other doc-level embeddings. Use to discover existing context before adding new docs and avoid duplication.')
   async related(
-    @Param('id') id: DocHandle,
-    @Description('Max results') @CliOption('limit', 'n') @Optional() limit: string,
-    @Description('Output format') @CliOption('format') @Optional() format: string,
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
+    @Description('Source doc handle (canonical id / filename / `./path`). The doc itself is excluded from the results.') @Param('id') id: DocHandle,
+    @Description('Maximum number of related docs to return. Default: 10.') @CliOption('limit', 'n') @Optional() limit: string,
+    @Description('Output format. Default: human-readable list with similarity scores. Use --format json for the raw array.') @CliOption('format') @Optional() format: string,
+    @Description('Target wiki name. Defaults to the wiki resolved from `kb.config.json` in the current directory, falling back to the global `defaultWiki`. Run `kb wiki list` to see available wikis.') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string | object> {
     const parsedLimit = limit ? parseInt(limit, 10) : 10
     const ref = this.config.resolveWiki(wiki)

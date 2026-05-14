@@ -39,11 +39,11 @@ export class LintController {
   private get gateway() { return services.gateway }
 
   @Cli('lint')
-  @Description('Check knowledge base integrity')
+  @Description('Audit the target wiki for retrievability and integrity problems: missing required frontmatter fields, broken markdown links, index drift (file content does not match indexed content), corrupt index rows, and per-doc retrievability warnings (short docs, oversized docs, chunk-merge candidates, long paragraphs). Use --fix to auto-repair the safe categories.')
   async lint(
-    @Description('Auto-fix issues') @CliOption('fix') fix: boolean,
-    @Description('Output format') @CliOption('format') @Optional() format: string,
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
+    @Description('Auto-repair safe categories: re-index docs whose content drifted from the index, strip broken outgoing links from frontmatter/body, and delete corrupt index rows. Reports each repair grouped by kind. Does NOT modify content for retrievability warnings (those need author judgment).') @CliOption('fix') fix: boolean,
+    @Description('Output format. Default: human-readable table. Use --format json for `{ issues: [...], repairs: [...] }`.') @CliOption('format') @Optional() format: string,
+    @Description('Target wiki name. Defaults to the wiki resolved from `kb.config.json` in the current directory, falling back to the global `defaultWiki`. Run `kb wiki list` to see available wikis.') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
@@ -103,9 +103,9 @@ export class LintController {
   }
 
   @Cli('reindex')
-  @Description('Rebuild index from markdown files')
+  @Description('Drop and rebuild the entire index (FTS, vectors, document/link/chunk tables) from the markdown files on disk. Markdown files are the source of truth; the index is rebuilt around them. Slow on large wikis — prints per-file progress. Compacts on-disk size via VACUUM at the end.')
   async reindex(
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
+    @Description('Target wiki name. Defaults to the wiki resolved from `kb.config.json` in the current directory, falling back to the global `defaultWiki`. Run `kb wiki list` to see available wikis.') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
@@ -131,10 +131,10 @@ export class LintController {
   }
 
   @Cli('reindex/:id')
-  @Description('Rebuild index for a single document')
+  @Description('Re-index a single document: re-chunk by H2/H3, recompute embeddings (skipped per-chunk if contentHash matches), and refresh FTS/vector/link rows for this doc only. Faster than a full reindex when only one doc changed or shows drift.')
   async reindexDoc(
     @Param('id') id: DocHandle,
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
+    @Description('Target wiki name. Defaults to the wiki resolved from `kb.config.json` in the current directory, falling back to the global `defaultWiki`. Run `kb wiki list` to see available wikis.') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
@@ -147,9 +147,9 @@ export class LintController {
   }
 
   @Cli('toc')
-  @Description('Display table of contents for a knowledge base')
+  @Description('Print a hierarchical table of contents for the wiki, grouped by category. Use as a starting overview before searching — categories surface naturally and you can spot gaps.')
   async toc(
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
+    @Description('Target wiki name. Defaults to the wiki resolved from `kb.config.json` in the current directory, falling back to the global `defaultWiki`. Run `kb wiki list` to see available wikis.') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
@@ -179,10 +179,10 @@ export class LintController {
   }
 
   @Cli('log')
-  @Description('Show recent activity log')
+  @Description('Show the wiki activity log: every ingest/update/delete/rename plus any manual entries added via `kb log add`. Useful for "what happened in this wiki recently" reviews and agent session retrospectives.')
   async log(
-    @Description('Number of entries') @CliOption('limit', 'n') @Optional() limit: string,
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
+    @Description('Number of most-recent entries to print. Default: 20.') @CliOption('limit', 'n') @Optional() limit: string,
+    @Description('Target wiki name. Defaults to the wiki resolved from `kb.config.json` in the current directory, falling back to the global `defaultWiki`. Run `kb wiki list` to see available wikis.') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
@@ -203,12 +203,12 @@ export class LintController {
   }
 
   @Cli('log/add')
-  @Description('Add a manual log entry (for agent session summaries)')
+  @Description('Append a manual entry to the wiki activity log. Intended for agents to record what they did in a session ("ingested doc X because Y", "decided not to add Z because already covered by W") so future sessions have context.')
   async logAdd(
-    @Description('Operation type (ingest, query, lint, note)') @CliOption('op', 'o') op: string,
-    @Description('Related document ID') @CliOption('doc', 'd') @Optional() doc: DocHandle,
-    @Description('Details / reasoning') @CliOption('details', 'm') @Optional() details: string,
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
+    @Description('Operation type. One of: `ingest` (added/updated content), `query` (a search/read worth remembering), `lint` (a maintenance pass), `note` (free-form). Defaults to `note` if omitted.') @CliOption('op', 'o') op: string,
+    @Description('Related doc handle (canonical id / filename / `./path`). Optional — set when the log entry is about a specific doc.') @CliOption('doc', 'd') @Optional() doc: DocHandle,
+    @Description('Free-form details / reasoning. Short prose is fine; this is what makes the entry useful to read later.') @CliOption('details', 'm') @Optional() details: string,
+    @Description('Target wiki name. Defaults to the wiki resolved from `kb.config.json` in the current directory, falling back to the global `defaultWiki`. Run `kb wiki list` to see available wikis.') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
@@ -217,9 +217,9 @@ export class LintController {
   }
 
   @Cli('schema')
-  @Description('Show knowledge base schema')
+  @Description('Print the wiki\'s schema doc (`_schema.md`, if present) — a top-level description of what this wiki covers, categories in use, and conventions. Run `kb schema update` to regenerate it from current content.')
   async schemaRead(
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
+    @Description('Target wiki name. Defaults to the wiki resolved from `kb.config.json` in the current directory, falling back to the global `defaultWiki`. Run `kb wiki list` to see available wikis.') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
@@ -234,9 +234,9 @@ export class LintController {
   }
 
   @Cli('schema/update')
-  @Description('Regenerate knowledge base schema')
+  @Description('Regenerate `_schema.md` from the current set of docs: scans categories, doc counts per category, and recently updated docs. Overwrites the existing schema file.')
   async schemaUpdate(
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
+    @Description('Target wiki name. Defaults to the wiki resolved from `kb.config.json` in the current directory, falling back to the global `defaultWiki`. Run `kb wiki list` to see available wikis.') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)

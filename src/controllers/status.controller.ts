@@ -5,7 +5,7 @@ import { CURRENT_SCHEMA_VERSION } from '../services/config.service.js'
 @Controller()
 export class StatusController {
   @Cli('status')
-  @Description('Show local environment status (server, config, schema, wikis)')
+  @Description('Print the effective local environment: whether `kb serve` is running (and if so, which model it has loaded), the resolved embedding model from config, schema version (with migration hint if outdated), data directory, the effective default wiki and where it was resolved from, and the list of local wikis. Use to diagnose "kb is using a different wiki than I expected" or "searches feel off."')
   status(): string {
     const lines: string[] = []
     const config = services.config

@@ -157,13 +157,13 @@ const AGENTS: AgentConfig[] = [
 @Controller()
 export class SetupController {
   @Cli('setup')
-  @Description('Set up kb integration for AI agents')
+  @Description('Install kb integration files for one or more AI coding agents so they discover and use kb in their conversations. Writes per-agent config files (rules, slash commands, memo blocks in CLAUDE.md / AGENTS.md). Idempotent: re-running updates the integration in place. With no flags, prints the supported-agents list and usage hints instead of doing anything.')
   setup(
-    @Description('Agents to install (comma-separated: claude,cursor,codex,cline,windsurf,continue)')
+    @Description('Comma-separated list of agents to install for. Accepted: claude, cursor, codex, cline, windsurf, continue. Whitespace around tokens tolerated. Mutually exclusive with --all.')
     @CliOption('agents', 'a') @Optional() agents: AgentList,
-    @Description('Install for all supported agents')
+    @Description('Install for every supported agent. Convenient when bootstrapping a workspace. Mutually exclusive with --agents.')
     @CliOption('all') all: boolean,
-    @Description('Write to user-scope files (~/.claude/CLAUDE.md, ~/.codex/AGENTS.md) instead of project-local')
+    @Description('Write user-scope (home directory) files instead of project-local: ~/.claude/CLAUDE.md for Claude Code, ~/.codex/AGENTS.md for Codex. Agents without a documented user-scope file (Cursor, Cline, Windsurf, Continue.dev) are skipped with a note.')
     @CliOption('global', 'g') @Optional() global: boolean,
   ): string {
     const cwd = process.cwd()

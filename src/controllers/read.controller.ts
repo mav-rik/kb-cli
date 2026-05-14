@@ -11,15 +11,15 @@ export class ReadController {
 
   @Cli('read/:path')
   @Cli('get/:path')
-  @Description('Read a document')
+  @Description('Print a document\'s contents (frontmatter + body) with line numbers. Use --lines to read a slice, --meta to skip the body, --links to list outgoing markdown links, or --follow to read another doc by relative link target.')
   async read(
-    @Param('path') docPath: DocHandle,
-    @Description('Line range (e.g., 1-50)') @CliOption('lines', 'l') @Optional() lines: string,
-    @Description('Context lines around the range') @CliOption('context', 'c') @Optional() context: string,
-    @Description('Show metadata only') @CliOption('meta', 'm') meta: boolean,
-    @Description('List outgoing links') @CliOption('links') links: boolean,
-    @Description('Follow a link') @CliOption('follow', 'f') @Optional() follow: string,
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
+    @Description('Doc handle. Accepts canonical id (`foo`), filename (`foo.md`), or relative path (`./foo.md`). Run `kb resolve <handle>` if you want to see how an input would be canonicalized.') @Param('path') docPath: DocHandle,
+    @Description('Line range to read, e.g. `1-50` (inclusive) or `42` (single line). Out-of-range bounds are clamped to the file length.') @CliOption('lines', 'l') @Optional() lines: string,
+    @Description('Number of context lines to print before and after the --lines range. Ignored without --lines.') @CliOption('context', 'c') @Optional() context: string,
+    @Description('Print only the frontmatter — no body. Mutually useful with --links to inspect metadata without loading content.') @CliOption('meta', 'm') meta: boolean,
+    @Description('Print the list of outgoing markdown links found in the body (target → link text), instead of the body itself.') @CliOption('links') links: boolean,
+    @Description('Follow a relative link from the doc and read that target instead. Pass the link target (filename or id); kb canonicalizes it.') @CliOption('follow', 'f') @Optional() follow: string,
+    @Description('Target wiki name. Defaults to the wiki resolved from `kb.config.json` in the current directory, falling back to the global `defaultWiki`. Run `kb wiki list` to see available wikis.') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string | object> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)
@@ -70,11 +70,11 @@ export class ReadController {
   }
 
   @Cli('resolve/:input')
-  @Description('Resolve any doc handle (id, filename, ./path, full path) to its canonical id + file')
+  @Description('Diagnostic: show how any input would be canonicalized and whether the resulting doc exists. Reports the canonical id, filename, existence, title/category (if found), and fuzzy suggestions (if not). Use this when `kb read` / `kb update` say "not found" to see exactly what kb interpreted.')
   async resolve(
-    @Param('input') input: DocHandle,
-    @Description('Output format') @CliOption('format') @Optional() format: string,
-    @Description('Wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
+    @Description('Any accepted form: canonical id (`foo`), filename (`foo.md`), relative path (`./foo.md`), or full disk path. kb normalizes it and reports the result.') @Param('input') input: DocHandle,
+    @Description('Output format. Default: human-readable text with optional "Did you mean:" suggestions. Use --format json for the structured `{ input, id, filename, exists, title?, category?, suggestions[] }` object.') @CliOption('format') @Optional() format: string,
+    @Description('Target wiki name. Defaults to the wiki resolved from `kb.config.json` in the current directory, falling back to the global `defaultWiki`. Run `kb wiki list` to see available wikis.') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string | object> {
     const ref = this.config.resolveWiki(wiki)
     const ops = this.gateway.getOps(ref)

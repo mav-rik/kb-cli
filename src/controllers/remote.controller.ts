@@ -9,11 +9,11 @@ export class RemoteController {
   private client = new RemoteClient()
 
   @Cli('add/:name')
-  @Description('Register a remote KB')
+  @Description('Register a remote kb server under a local name. Stores the URL (and optional secret) in ~/.kb/remotes.json. After registering, use `kb remote wikis <name>` to discover wikis and `kb remote attach` to expose them locally.')
   add(
-    @Param('name') name: string,
-    @Description('Remote URL (e.g., http://host:4141)') @CliOption('url') url: string,
-    @Description('Shared secret') @CliOption('secret') @Optional() secret: string,
+    @Description('Local nickname for this remote (your choice — does not have to match anything on the server). Used as the handle for all subsequent `kb remote` subcommands.') @Param('name') name: string,
+    @Description('Base URL of the remote `kb serve` instance, e.g. `http://host:4141`. No trailing path.') @CliOption('url') url: string,
+    @Description('Bearer token. Set this if the remote was started with `kb serve --secret <token>`; omit otherwise.') @CliOption('secret') @Optional() secret: string,
   ): string {
     if (this.remoteConfig.getRemote(name)) {
       return `Error: Remote "${name}" already registered.`
@@ -23,8 +23,8 @@ export class RemoteController {
   }
 
   @Cli('remove/:name')
-  @Description('Unregister a remote KB (keeps remote data)')
-  remove(@Param('name') name: string): string {
+  @Description('Forget a registered remote. Detaches any attached wikis and removes the entry from ~/.kb/remotes.json. Does NOT touch the remote server itself — to delete wikis on the remote, use `kb remote delete-wiki`.')
+  remove(@Description('Local nickname of the remote to forget.') @Param('name') name: string): string {
     if (!this.remoteConfig.getRemote(name)) {
       return `Error: Remote "${name}" not found.`
     }
@@ -33,7 +33,7 @@ export class RemoteController {
   }
 
   @Cli('list')
-  @Description('List registered remote KBs')
+  @Description('Print every registered remote: nickname, URL, and how many wikis from it are attached locally. Run `kb remote wikis <name>` to discover wikis on a specific remote.')
   list(): string {
     const remotes = this.remoteConfig.listRemotes()
     if (remotes.length === 0) {
@@ -47,8 +47,8 @@ export class RemoteController {
   }
 
   @Cli('connect/:name')
-  @Description('Test connection to a remote KB')
-  async connect(@Param('name') name: string): Promise<string> {
+  @Description('Health-check a registered remote. Calls GET /api/health and reports success or the underlying error. Useful for debugging "remote wikis return nothing" or "search fails" scenarios.')
+  async connect(@Description('Local nickname of the remote to probe.') @Param('name') name: string): Promise<string> {
     const remote = this.remoteConfig.getRemote(name)
     if (!remote) return `Error: Remote "${name}" not found.`
 
@@ -61,8 +61,8 @@ export class RemoteController {
   }
 
   @Cli('wikis/:name')
-  @Description('List wikis available on a remote KB')
-  async wikis(@Param('name') name: string): Promise<string> {
+  @Description('List every wiki on the remote server. Wikis already attached locally are flagged with "(attached)". Use this to see what is available before running `kb remote attach`.')
+  async wikis(@Description('Local nickname of the remote to query.') @Param('name') name: string): Promise<string> {
     const remote = this.remoteConfig.getRemote(name)
     if (!remote) return `Error: Remote "${name}" not found.`
 
@@ -82,11 +82,11 @@ export class RemoteController {
   }
 
   @Cli('attach/:kbName/:wikiName')
-  @Description('Attach a remote wiki for local use')
+  @Description('Expose a remote wiki under a local name so commands like `kb search --wiki <name>` can target it transparently. Use --alias when the remote\'s wiki name collides with a local wiki.')
   attach(
-    @Param('kbName') kbName: string,
-    @Param('wikiName') wikiName: string,
-    @Description('Local alias') @CliOption('alias', 'a') @Optional() alias: string,
+    @Description('Local nickname of the registered remote (from `kb remote add`).') @Param('kbName') kbName: string,
+    @Description('Wiki name on the remote server. Run `kb remote wikis <kbName>` to discover available names.') @Param('wikiName') wikiName: string,
+    @Description('Local alias for the attached wiki. Required when the remote wiki name collides with a local wiki or another attached wiki.') @CliOption('alias', 'a') @Optional() alias: string,
   ): string {
     const localName = alias || wikiName
 
@@ -102,19 +102,19 @@ export class RemoteController {
   }
 
   @Cli('detach/:name')
-  @Description('Detach a remote wiki')
-  detach(@Param('name') name: string): string {
+  @Description('Stop exposing a remote wiki locally. Removes the attachment from ~/.kb/remotes.json — the remote wiki itself is untouched and can be re-attached later.')
+  detach(@Description('Local name (or alias) of the attached wiki to detach.') @Param('name') name: string): string {
     const result = this.remoteConfig.detachWiki(name)
     if (result.error) return `Error: ${result.error}`
     return `Detached "${name}".`
   }
 
   @Cli('create-wiki/:kbName/:wikiName')
-  @Description('Create a new wiki on a remote KB')
+  @Description('Create a wiki on a remote server (calls POST /api/wiki) and auto-attach it locally in one step. If the local name collides, the wiki is created but not attached; re-run `kb remote attach` with --alias.')
   async createWiki(
-    @Param('kbName') kbName: string,
-    @Param('wikiName') wikiName: string,
-    @Description('Local alias') @CliOption('alias', 'a') @Optional() alias: string,
+    @Description('Local nickname of the registered remote.') @Param('kbName') kbName: string,
+    @Description('Wiki name to create on the remote. Must satisfy the WikiName constraints (letters/digits/dashes/underscores, 1-64 chars).') @Param('wikiName') wikiName: string,
+    @Description('Local alias for the newly-attached wiki. Required if `wikiName` collides with an existing local or attached wiki.') @CliOption('alias', 'a') @Optional() alias: string,
   ): Promise<string> {
     const remote = this.remoteConfig.getRemote(kbName)
     if (!remote) return `Error: Remote "${kbName}" not found.`
@@ -135,11 +135,11 @@ export class RemoteController {
   }
 
   @Cli('delete-wiki/:kbName/:wikiName')
-  @Description('Delete a wiki on a remote KB (destructive!)')
+  @Description('PERMANENTLY delete a wiki on a remote server. Two-step safety: without --force, prints the warning and exits without acting. Also auto-detaches the wiki locally if it was attached. Irreversible on the remote.')
   async deleteWiki(
-    @Param('kbName') kbName: string,
-    @Param('wikiName') wikiName: string,
-    @Description('Confirm deletion') @CliOption('force') force: boolean,
+    @Description('Local nickname of the registered remote.') @Param('kbName') kbName: string,
+    @Description('Wiki name on the remote to delete.') @Param('wikiName') wikiName: string,
+    @Description('Required to actually perform the deletion. Without --force, the command is a no-op safety preview.') @CliOption('force') force: boolean,
   ): Promise<string> {
     if (!force) {
       return `This will PERMANENTLY DELETE wiki "${wikiName}" on remote "${kbName}".\nRe-run with --force to confirm.`

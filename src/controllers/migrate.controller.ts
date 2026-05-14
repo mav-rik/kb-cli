@@ -9,11 +9,11 @@ export class MigrateController {
   private get migration() { return services.migration }
 
   @Cli('migrate')
-  @Description('Upgrade local wiki schema/embeddings to the current version')
+  @Description('Upgrade older local wikis to the current schema and embedding format. Detects per-wiki schema version, drops/recreates tables for breaking changes, and re-indexes content where embeddings need to change. Interactive by default — prints the plan and asks for confirmation. Use --yes for non-interactive runs.')
   async migrate(
-    @Description('Skip the confirmation prompt') @CliOption('yes', 'y') yes: boolean,
-    @Description('Show the migration plan without applying it') @CliOption('dry-run') dryRun: boolean,
-    @Description('Limit migration to a single wiki') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
+    @Description('Skip the confirmation prompt and run the migration immediately. Required for non-interactive contexts (CI, scripts).') @CliOption('yes', 'y') yes: boolean,
+    @Description('Print the migration plan (what would change per wiki) and exit without modifying anything. Always safe.') @CliOption('dry-run') dryRun: boolean,
+    @Description('Limit migration to a single wiki (by name). Omit to migrate every local wiki under ~/.kb/.') @CliOption('wiki', 'w') @Optional() wiki: WikiName,
   ): Promise<string> {
     const serverInfo = services.localServer.getCached()
     if (serverInfo) {

@@ -13,7 +13,7 @@ export class WikiController {
   private get remoteConfig() { return services.remoteConfig }
 
   @Cli('create/:name')
-  @Description('Create a new wiki')
+  @Description('Create a new local wiki. Each wiki is an isolated knowledge base stored at ~/.kb/<name>/ with its own docs/ folder and index.db. The new wiki does not become the default — use `kb wiki use <name>` or a project-local `kb.config.json` to make it the default for subsequent commands.')
   create(@Param('name') name: WikiName) {
     // `name: WikiName` carries the @expect.* constraints from api-bodies.as;
     // the global validatorPipe (main.ts) runs them before this body executes.
@@ -23,7 +23,7 @@ export class WikiController {
   }
 
   @Cli('use/:name')
-  @Description('Set the default wiki')
+  @Description('Set the global default wiki. Affects every command that does not get an explicit --wiki flag and is not run from a directory with a kb.config.json. For per-project pinning, prefer kb.config.json over this command.')
   use(@Param('name') name: WikiName) {
     if (!this.wikiMgmt.exists(name)) {
       return `Error: Wiki "${name}" does not exist. Run \`kb wiki create ${name}\` first.`
@@ -33,7 +33,7 @@ export class WikiController {
   }
 
   @Cli('list')
-  @Description('List all wikis')
+  @Description('List every local wiki (under ~/.kb/) and every attached remote wiki. The current default wiki is marked with `*` and the line below shows where the default came from (kb.config.json in this dir vs. global config). Doc counts and on-disk sizes are shown per wiki.')
   list() {
     const wikis = this.wikiMgmt.list()
     const lines: string[] = []
@@ -101,11 +101,11 @@ export class WikiController {
   }
 
   @Cli('delete/:name')
-  @Description('Delete a wiki')
+  @Description('Permanently delete a local wiki — removes both the markdown files under ~/.kb/<name>/docs/ and the index.db. Irreversible; there is no soft-delete. The "default" wiki is protected and requires --force.')
   delete(
     @Param('name') name: WikiName,
     @CliOption('force', 'f')
-    @Description('Force delete even for default wiki')
+    @Description('Allow deleting the protected "default" wiki. Required only for that one name; other wikis delete without --force.')
     force?: boolean,
   ) {
     if (name === 'default' && !force) {
@@ -118,7 +118,7 @@ export class WikiController {
   }
 
   @Cli('info/:name')
-  @Description('Show info about a wiki')
+  @Description('Print summary stats for one wiki: total document count, on-disk size, and the timestamp of the most recently modified doc. Works on both local wikis and attached remote wikis.')
   async info(@Param('name') name: WikiName): Promise<string> {
     const ref = this.config.resolveWiki(name)
     if (ref.type === 'local' && !this.wikiMgmt.exists(ref.name)) {
