@@ -82,18 +82,31 @@ export class ReadController {
 
     if (format === 'json') return r
 
-    const lines: string[] = [
-      `Input:    ${r.input}`,
-      `Id:       ${r.id || '(empty after normalization)'}`,
-      `Filename: ${r.filename}`,
-      `Exists:   ${r.exists ? 'yes' : 'no'}`,
-    ]
-    if (r.title) lines.push(`Title:    ${r.title}`)
-    if (r.category) lines.push(`Category: ${r.category}`)
-    if (!r.exists && r.suggestions.length > 0) {
-      lines.push('')
-      lines.push('Did you mean:')
-      for (const s of r.suggestions) lines.push(`  - ${s}`)
+    // When the doc exists, the id/filename describe the resolved target.
+    // When it doesn't, they're only the canonicalization of the input — say
+    // so explicitly to avoid reading like "here's the doc."
+    const lines: string[] = [`Input:    ${r.input}`]
+    if (r.exists) {
+      lines.push(
+        `Id:       ${r.id}`,
+        `Filename: ${r.filename}`,
+        `Exists:   yes`,
+      )
+      if (r.title) lines.push(`Title:    ${r.title}`)
+      if (r.category) lines.push(`Category: ${r.category}`)
+    } else {
+      const candidateId = r.id || '(empty after normalization)'
+      lines.push(
+        `Exists:   no`,
+        `Would normalize to:`,
+        `  Id:       ${candidateId}`,
+        `  Filename: ${r.filename}`,
+      )
+      if (r.suggestions.length > 0) {
+        lines.push('')
+        lines.push('Did you mean:')
+        for (const s of r.suggestions) lines.push(`  - ${s}`)
+      }
     }
     return lines.join('\n')
   }
