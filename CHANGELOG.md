@@ -29,6 +29,7 @@ Retrieval-quality release. Documents are now chunked by H2/H3 heading and search
 
 ### Added
 
+- **Inline remediation hints in lint output.** Every retrievability warning (`chunk-merge`, `long-paragraph`, `doc-too-short`, `doc-too-long`) and `missing`-frontmatter error now carries an actionable `hint` field pointing to the exact frontmatter knob (`important_sections`, `suppress_merge_warn`, `suppress_lint`) or the structural fix. The CLI renders it as a `↳` continuation line in both `kb lint` and `kb add/update --dry-run` tables. `--format json` exposes it as an optional `hint` field on each `LintIssue`. The `missing`-frontmatter hint detects when a user has set `suppress_*`/`important_sections` but forgotten `id`/`title`/`category` and calls that out specifically (the operator-error shape from real-world reports). Skill docs (`kb skill ingest`) also reinforce: prefer frontmatter suppression over living with warnings for intentional index/landing/list sections.
 - **`kb lint --fix` now reports what it repaired**, grouped by kind. Sample output:
 
   ```

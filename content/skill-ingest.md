@@ -75,9 +75,11 @@ kb add --title "Descriptive Title" --category <category> --tags "tag1,tag2" --co
 # Real run also returns lint warnings (always-on), so you'll see anything left over.
 ```
 
-For large content, use `--file <path>` or pipe via `--stdin`.
+For large content, use `--file <path>` or pipe via `--stdin`. **`kb update --file <path>` works too** — replaces the doc body, parses optional frontmatter (CLI flags win; file frontmatter fills gaps). Cleaner than `--content "$(cat file)"` for wiki-sync workflows.
 
-`kb update --dry-run` works the same way — applies the patch (`--content` or `--append`) in memory, lints the merged result, and returns the issues without touching the index.
+`kb update --dry-run` works the same way — applies the patch (`--content`, `--append`, or `--file`) in memory, lints the merged result, and returns the issues without touching the index.
+
+> **For intentional index/landing/list sections, prefer frontmatter suppression over living with warnings.** Lint output now prints the exact remediation pointer for each issue: `important_sections` (preserve a short section from auto-merge), `suppress_merge_warn` (allow the merge but stop warning), and `suppress_lint` (silence doc-level soft warnings: `chunk-merge`, `doc-too-short`, `doc-too-long`, `long-paragraph`). Required frontmatter (`id`, `title`, `category`) is still mandatory even when using suppressions.
 
 ---
 

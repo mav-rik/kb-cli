@@ -23,6 +23,8 @@ export interface LintIssue {
   severity: 'error' | 'warning'
   file: string
   details: string
+  /** Actionable remediation pointer. Surfaced inline by CLI formatters. */
+  hint?: string
 }
 
 const LONG_PARAGRAPH_THRESHOLD = 1500
@@ -274,11 +276,23 @@ export class DocWorkflowService {
     if (!parsed.frontmatter.title) missing.push('title')
     if (!parsed.frontmatter.category) missing.push('category')
     if (missing.length > 0) {
+      // If the user set any suppression field but forgot the required ones,
+      // call that out — the common shape of this mistake is "staged a snippet
+      // with suppress_lint at the top, didn't realize id/title/category are
+      // still required for the doc to be indexable at all."
+      const usingSuppression =
+        (parsed.frontmatter.suppressLint?.length ?? 0) > 0 ||
+        (parsed.frontmatter.importantSections?.length ?? 0) > 0 ||
+        (parsed.frontmatter.suppressMergeWarn?.length ?? 0) > 0
+      const hint = usingSuppression
+        ? `Required frontmatter (id, title, category) must be present even when using suppress_lint / suppress_merge_warn / important_sections.`
+        : `Add frontmatter at the top of the file: --- id, title, category --- (tags optional).`
       issues.push({
         type: 'missing',
         severity: 'error',
         file: filename,
         details: `Missing frontmatter: ${missing.join(', ')}`,
+        hint,
       })
     }
 
@@ -292,6 +306,7 @@ export class DocWorkflowService {
           severity: 'warning',
           file: filename,
           details: `line ${p.fromLine}: ${p.chars} chars`,
+          hint: `Break into smaller paragraphs (the 512-token embedding model will truncate). If the wall of text is deliberate (transcript, quote), add long-paragraph to frontmatter suppress_lint.`,
         })
       }
     }
@@ -303,6 +318,7 @@ export class DocWorkflowService {
         severity: 'warning',
         file: filename,
         details: `${wordCount} words`,
+        hint: `Expand to >200 words, or fold into a larger doc. For intentional index/landing pages, add doc-too-short to frontmatter suppress_lint.`,
       })
     }
     if (wordCount > DOC_TOO_LONG_WORDS && !suppressLint.has('doc-too-long')) {
@@ -311,6 +327,7 @@ export class DocWorkflowService {
         severity: 'warning',
         file: filename,
         details: `${wordCount} words`,
+        hint: `Split into linked sub-docs (one topic each). For canonical references that shouldn't split, add doc-too-long to frontmatter suppress_lint.`,
       })
     }
 
@@ -330,11 +347,15 @@ export class DocWorkflowService {
     for (const c of mergedAway) {
       const heading = c.heading
       if (heading && suppressed.has(heading.toLowerCase())) continue
+      const hint = heading
+        ? `If "${heading}" is intentional, add it to frontmatter important_sections (preserve) or suppress_merge_warn (silence). Otherwise restructure / expand the section.`
+        : `Move intro content under a heading, or expand it past ~160 chars / drop link-heavy syntax.`
       issues.push({
         type: 'chunk-merge',
         severity: 'warning',
         file: filename,
         details: `"${heading ?? '(intro)'}" lines ${c.fromLine}-${c.toLine}`,
+        hint,
       })
     }
 

@@ -230,6 +230,7 @@ function formatOpResult(
     const type = issue.type.padEnd(8)
     const severity = issue.severity.padEnd(8)
     lines.push(`${type} | ${severity} | ${issue.details}`)
+    if (issue.hint) lines.push(`         |          |   ↳ ${issue.hint}`)
   }
   return lines.join('\n')
 }

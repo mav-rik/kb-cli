@@ -82,6 +82,7 @@ export class LintController {
       const severity = issue.severity.padEnd(8)
       const file = issue.file.padEnd(15)
       lines.push(`${type} | ${severity} | ${file} | ${issue.details}`)
+      if (issue.hint) lines.push(`         |          |                 |   ↳ ${issue.hint}`)
     }
 
     if (fix && repairs.length > 0) {
